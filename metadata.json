@@ -1,0 +1,6 @@
+{
+  "name": "MarketSense Execution — Algorithmic Trading & Risk Hub",
+  "description": "Terminal PWA institucional de ejecución algorítmica 24/7, guardrails de drawdown para cuentas de fondeo, sincronización de estrategias MarketSense y cuaderno de aprendizaje.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

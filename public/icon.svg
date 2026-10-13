@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="106" fill="none" stroke="#10b981" stroke-width="4" stroke-opacity="0.3" />
+  
+  <!-- Safe Zone Inner Graphic: Trend line + Shield + Node -->
+  <g transform="translate(60, 60)">
+    <!-- Grid subtle lines -->
+    <path d="M 40 300 L 350 300 M 40 220 L 350 220 M 40 140 L 350 140" stroke="#334155" stroke-width="3" stroke-dasharray="6,6" opacity="0.4" />
+    
+    <!-- Candlestick pillars -->
+    <line x1="90" y1="200" x2="90" y2="280" stroke="#10b981" stroke-width="6" />
+    <rect x="80" y="220" width="20" height="45" rx="3" fill="#10b981" />
+
+    <line x1="160" y1="170" x2="160" y2="270" stroke="#f43f5e" stroke-width="6" />
+    <rect x="150" y="190" width="20" height="55" rx="3" fill="#f43f5e" />
+
+    <line x1="230" y1="130" x2="230" y2="240" stroke="#10b981" stroke-width="6" />
+    <rect x="220" y="150" width="20" height="60" rx="3" fill="#10b981" />
+
+    <line x1="300" y1="90" x2="300" y2="190" stroke="#10b981" stroke-width="6" />
+    <rect x="290" y="110" width="20" height="55" rx="3" fill="#10b981" />
+
+    <!-- AI Trend Line Glowing -->
+    <path d="M 60 260 Q 150 230 200 170 T 330 90" fill="none" stroke="url(#glowGrad)" stroke-width="12" stroke-linecap="round" />
+    <circle cx="330" cy="90" r="14" fill="#10b981" stroke="#ffffff" stroke-width="5" />
+  </g>
+</svg>
