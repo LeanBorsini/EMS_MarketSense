@@ -34,15 +34,15 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between gap-3">
           {/* Brand */}
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#191C21] text-[#FBF9F4] flex items-center justify-center font-bold font-mono text-sm shadow-sm">
-              MS
+            <div className="w-8 h-8 rounded-lg bg-[#191C21] text-[#FBF9F4] flex items-center justify-center font-bold font-mono text-xs shadow-sm">
+              EMS
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-lg font-bold text-[#191C21] tracking-tight font-serif">
-                MarketSense
+                EMS-MarketSense
               </span>
               <span className="text-[12px] text-[#575B62] font-serif italic hidden sm:inline">
-                · Trading Autónomo
+                · Auto Trading Bot
               </span>
             </div>
           </div>

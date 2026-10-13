@@ -14,9 +14,9 @@ export default defineConfig(() => {
         includeAssets: ['apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
           id: '/',
-          name: 'MarketSense Execution — Algorithmic Trading & Risk Hub',
-          short_name: 'MS Execution',
-          description: 'Terminal institucional de ejecución algorítmica 24/7 y gestión estricta de riesgo para cuentas de fondeo, demo y reales.',
+          name: 'EMS-MarketSense',
+          short_name: 'EMS-MS',
+          description: 'Execution Management System y trading algorítmico 24/7.',
           theme_color: '#090d16',
           background_color: '#090d16',
           display: 'standalone',
