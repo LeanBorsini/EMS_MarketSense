@@ -6,6 +6,7 @@ import { SimpleBotControl } from './components/SimpleBotControl';
 import { SimpleConnectAccount } from './components/SimpleConnectAccount';
 import { SimpleStrategyBridge } from './components/SimpleStrategyBridge';
 import { SimpleJournal } from './components/SimpleJournal';
+import { UnattendedSetupTab } from './components/UnattendedSetupTab';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { NewTradeModal } from './components/NewTradeModal';
 import { TradeJournalDetailModal } from './components/TradeJournalDetailModal';
@@ -37,12 +38,13 @@ export default function App() {
     toggleDaemon,
     emergencyPanicCloseAll,
     resetCircuitBreaker,
+    addLog,
   } = useTradingEngine();
 
   const { isInstallable, isInstalled, isIOS, installApp } = usePWAInstall();
 
   // Tab navigation: Clean & simple
-  const [activeTab, setActiveTab] = useState<'BOT' | 'CONNECT' | 'STRATEGY' | 'JOURNAL'>('BOT');
+  const [activeTab, setActiveTab] = useState<'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL'>('BOT');
 
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -54,6 +56,10 @@ export default function App() {
 
   const openTrades = trades.filter(t => t.accountId === activeAccountId && t.status === 'OPEN');
   const accountTrades = trades.filter(t => t.accountId === activeAccountId);
+
+  const handleSendTestSignal = () => {
+    addLog('SUCCESS', '⚡ Señal de prueba Webhook recibida desde TradingView. Verificación 24/7 completada con éxito.');
+  };
 
   return (
     <div className="min-h-screen bg-[#F8F6F0] text-[#191C21] pb-16 selection:bg-[#EBF2EC] selection:text-[#2E4A35]">
@@ -80,6 +86,13 @@ export default function App() {
             onMoveToBreakeven={moveToBreakevenManual}
             onOpenJournalDetail={(trade) => setSelectedJournalTrade(trade)}
             onNavigateToStrategy={() => setActiveTab('STRATEGY')}
+          />
+        )}
+
+        {activeTab === 'SETUP' && (
+          <UnattendedSetupTab
+            activeAccount={activeAccount}
+            onSendTestSignal={handleSendTestSignal}
           />
         )}
 

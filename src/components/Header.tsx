@@ -13,8 +13,8 @@ import { TradingAccount } from '../types/execution';
 interface HeaderProps {
   activeAccount: TradingAccount;
   isDaemonRunning: boolean;
-  activeTab: 'BOT' | 'CONNECT' | 'STRATEGY' | 'JOURNAL';
-  setActiveTab: (tab: 'BOT' | 'CONNECT' | 'STRATEGY' | 'JOURNAL') => void;
+  activeTab: 'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL';
+  setActiveTab: (tab: 'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL') => void;
   onOpenSettings: () => void;
   onOpenPwa: () => void;
 }
@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* PWA Install shortcut button */}
             <button
               onClick={onOpenPwa}
-              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#EFECE4] border border-[#DDD8CD] text-xs text-[#2E4A35] hover:bg-[#EAE5DA] transition flex items-center gap-1 font-medium"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#EFECE4] border border-[#DDD8CD] text-xs text-[#2E4A35] hover:bg-[#EAE5DA] transition flex items-center gap-1 font-medium cursor-pointer"
               title="Instalar en tu móvil o PC"
             >
               <Smartphone className="w-3.5 h-3.5" />
@@ -77,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Settings button */}
             <button
               onClick={onOpenSettings}
-              className="p-1.5 rounded-lg bg-[#EFECE4] border border-[#DDD8CD] text-[#575B62] hover:text-[#191C21] hover:bg-[#EAE5DA] transition"
+              className="p-1.5 rounded-lg bg-[#EFECE4] border border-[#DDD8CD] text-[#575B62] hover:text-[#191C21] hover:bg-[#EAE5DA] transition cursor-pointer"
               title="Ajustes y opciones avanzadas"
             >
               <Settings className="w-4 h-4" />
@@ -85,12 +85,12 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* 4 Clean Navigation Tabs */}
-        <nav className="flex items-center justify-between border-t border-[#EAE5DA] pt-2">
+        {/* Navigation Tabs */}
+        <nav className="flex items-center justify-between border-t border-[#EAE5DA] pt-2 overflow-x-auto scrollbar-none">
           <div className="flex gap-1 sm:gap-2 w-full justify-between sm:justify-start">
             <button
               onClick={() => setActiveTab('BOT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'BOT'
                   ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
                   : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
@@ -100,8 +100,19 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('SETUP')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'SETUP'
+                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
+                  : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
+              }`}
+            >
+              ⚡ Piloto 24/7
+            </button>
+
+            <button
               onClick={() => setActiveTab('CONNECT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'CONNECT'
                   ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
                   : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
@@ -112,18 +123,18 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => setActiveTab('STRATEGY')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'STRATEGY'
                   ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
                   : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
               }`}
             >
-              📜 Estrategia MarketSense
+              📜 Estrategia
             </button>
 
             <button
               onClick={() => setActiveTab('JOURNAL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'JOURNAL'
                   ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
                   : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
