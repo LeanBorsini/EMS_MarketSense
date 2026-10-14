@@ -17,19 +17,21 @@ export function loadStoredAccounts(): TradingAccount[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
     if (raw) {
       const parsed: TradingAccount[] = JSON.parse(raw);
-      // If user had the old 10k default for MT5 Demo, upgrade it to 100k
+      // If user had the old 10k default for MT5 Demo or any demo account with 10k, upgrade it to 100k
       const migrated = parsed.map(acc => {
-        if (acc.id === 'acc-mt5-demo' && acc.initialBalance === 10000) {
+        if ((acc.id === 'acc-mt5-demo' || acc.name.includes('Demo')) && (acc.initialBalance <= 15000 || acc.currentBalance <= 15000)) {
           return {
             ...acc,
             initialBalance: 100000,
-            currentBalance: 100840,
-            currentEquity: 100790,
-            startOfDayBalance: 100700,
+            currentBalance: 100000,
+            currentEquity: 100000,
+            startOfDayBalance: 100000,
+            floatingPnL: 0,
+            dailyRealizedPnL: 0,
             riskRules: {
               ...acc.riskRules,
-              maxRiskPerTradeUsd: 1000,
-              maxDailyLossUsd: 3000,
+              maxRiskPerTradeUsd: (100000 * acc.riskRules.maxRiskPerTradePercent) / 100,
+              maxDailyLossUsd: (100000 * acc.riskRules.maxDailyLossPercent) / 100,
             },
           };
         }

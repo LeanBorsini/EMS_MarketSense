@@ -45,6 +45,23 @@ export interface TradingAccount {
   riskRules: AccountRiskRules;
 }
 
+export interface MT5LiveSyncInfo {
+  isSynced: boolean;
+  login: string;
+  server: string;
+  broker: string;
+  balance: number;
+  equity: number;
+  marginFree: number;
+  floatingProfit: number;
+  currency: string;
+  leverage: number;
+  lastSync: string;
+  pingMs: number;
+  connected: boolean;
+  syncSource: 'EA_MQL5' | 'PYTHON_BRIDGE' | 'DIRECT_GATEWAY';
+}
+
 export interface MathematicalBasis {
   modelName: string;
   formula: string;

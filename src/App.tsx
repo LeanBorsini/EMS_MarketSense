@@ -41,6 +41,9 @@ export default function App() {
     emergencyPanicCloseAll,
     resetCircuitBreaker,
     addLog,
+    mt5SyncInfo,
+    isSyncingMT5,
+    syncWithMetaTraderNow,
   } = useTradingEngine();
 
   const { isInstallable, isInstalled, isIOS, installApp } = usePWAInstall();
@@ -89,6 +92,9 @@ export default function App() {
             onOpenJournalDetail={(trade) => setSelectedJournalTrade(trade)}
             onNavigateToStrategy={() => setActiveTab('STRATEGY')}
             onUpdateBalance={(newBal) => updateAccountBalance(activeAccount.id, newBal)}
+            onSyncMetaTraderNow={syncWithMetaTraderNow}
+            isSyncingMT5={isSyncingMT5}
+            mt5SyncInfo={mt5SyncInfo}
           />
         )}
 
@@ -106,6 +112,9 @@ export default function App() {
             onSwitchAccount={switchAccount}
             onAddAccount={addAccount}
             onUpdateBalance={updateAccountBalance}
+            onSyncMetaTraderNow={syncWithMetaTraderNow}
+            isSyncingMT5={isSyncingMT5}
+            mt5SyncInfo={mt5SyncInfo}
           />
         )}
 
