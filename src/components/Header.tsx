@@ -4,6 +4,7 @@ import {
   Settings, 
   Download, 
   Smartphone, 
+  Laptop,
   Power,
   ChevronDown,
   Layers
@@ -17,6 +18,7 @@ interface HeaderProps {
   setActiveTab: (tab: 'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL') => void;
   onOpenSettings: () => void;
   onOpenPwa: () => void;
+  onOpenSync: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onOpenSettings,
   onOpenPwa,
+  onOpenSync,
 }) => {
   return (
     <header className="border-b border-[#E7E2D8] bg-[#F8F6F0]/95 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 py-3">
@@ -65,6 +68,16 @@ export const Header: React.FC<HeaderProps> = ({
                 ${activeAccount.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </span>
             </div>
+
+            {/* Sync PC / Phone button */}
+            <button
+              onClick={onOpenSync}
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#EBF2EC] border border-[#C5DDCB] text-xs text-[#2E4A35] hover:bg-[#D7E8DA] transition flex items-center gap-1.5 font-bold cursor-pointer"
+              title="Sincronizar sesión entre PC y Móvil con código de 5 dígitos"
+            >
+              <Laptop className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Sincronizar</span>
+            </button>
 
             {/* PWA Install shortcut button */}
             <button

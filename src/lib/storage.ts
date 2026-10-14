@@ -179,20 +179,21 @@ export function saveStoredLogs(logs: DaemonLog[]) {
   }
 }
 
-export function exportFullAppState(): string {
-  const data = {
+export function getFullAppStateObject() {
+  return {
     version: 1,
     exportedAt: new Date().toISOString(),
     accounts: loadStoredAccounts(),
     strategies: loadStoredStrategies(),
     trades: loadStoredTrades(),
+    activeAccountId: loadActiveAccountId(),
+    isDaemonRunning: loadDaemonRunning(),
   };
-  return JSON.stringify(data, null, 2);
 }
 
-export function importFullAppState(jsonString: string): boolean {
+export function applyFullAppStateObject(data: any): boolean {
   try {
-    const data = JSON.parse(jsonString);
+    if (!data || typeof data !== 'object') return false;
     if (data.accounts && Array.isArray(data.accounts)) {
       saveStoredAccounts(data.accounts);
     }
@@ -202,9 +203,30 @@ export function importFullAppState(jsonString: string): boolean {
     if (data.trades && Array.isArray(data.trades)) {
       saveStoredTrades(data.trades);
     }
+    if (data.activeAccountId && typeof data.activeAccountId === 'string') {
+      saveActiveAccountId(data.activeAccountId);
+    }
+    if (typeof data.isDaemonRunning === 'boolean') {
+      saveDaemonRunning(data.isDaemonRunning);
+    }
     return true;
+  } catch (e) {
+    console.error('Failed to apply app state object', e);
+    return false;
+  }
+}
+
+export function exportFullAppState(): string {
+  return JSON.stringify(getFullAppStateObject(), null, 2);
+}
+
+export function importFullAppState(jsonString: string): boolean {
+  try {
+    const data = JSON.parse(jsonString);
+    return applyFullAppStateObject(data);
   } catch (e) {
     console.error('Failed to import app state', e);
     return false;
   }
 }
+

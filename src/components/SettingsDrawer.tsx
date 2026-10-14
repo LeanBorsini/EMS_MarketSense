@@ -115,7 +115,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 <Smartphone className="w-4 h-4 text-[#2E4A35]" />
                 <span>Sincronizar con otro Móvil o PC</span>
               </div>
-              <span className="text-[10px] text-[#8C9098]">Código E2E</span>
+              <span className="text-[10px] text-[#2E4A35] font-semibold bg-[#EBF2EC] px-2 py-0.5 rounded-md">Código de 5 Dígitos</span>
             </button>
 
             <button

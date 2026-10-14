@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTradingEngine } from './hooks/useTradingEngine';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { Header } from './components/Header';
@@ -55,9 +55,20 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTradeModalOpen, setIsNewTradeModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [initialSyncCode, setInitialSyncCode] = useState('');
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [isRunnerGuideOpen, setIsRunnerGuideOpen] = useState(false);
   const [selectedJournalTrade, setSelectedJournalTrade] = useState<TradeOrder | null>(null);
+
+  // Auto-detect ?sync=XXXXX in URL to instantly open pairing modal
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const syncParam = params.get('sync');
+    if (syncParam) {
+      setInitialSyncCode(syncParam);
+      setIsSyncModalOpen(true);
+    }
+  }, []);
 
   const openTrades = trades.filter(t => t.accountId === activeAccountId && t.status === 'OPEN');
   const accountTrades = trades.filter(t => t.accountId === activeAccountId);
@@ -76,6 +87,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenPwa={() => setIsPwaModalOpen(true)}
+        onOpenSync={() => setIsSyncModalOpen(true)}
       />
 
       {/* 2. Main Content View according to activeTab */}
@@ -170,6 +182,7 @@ export default function App() {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         onRefreshData={() => window.location.reload()}
+        initialCode={initialSyncCode}
       />
 
       <PWAInstallModal

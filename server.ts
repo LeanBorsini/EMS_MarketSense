@@ -324,6 +324,125 @@ if __name__ == "__main__":
   return res.send(pyCode);
 });
 
+// ==========================================
+// 6. 5-Digit Device-to-Device Cloud Sync Relay
+// ==========================================
+interface SyncRoom {
+  code: string;
+  state: any;
+  createdAt: number;
+  lastUpdated: number;
+  devices: number;
+  hostDevice?: string;
+  guestDevice?: string;
+}
+
+const syncRooms = new Map<string, SyncRoom>();
+
+// Clean up old rooms after 48h
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of syncRooms.entries()) {
+    if (now - room.lastUpdated > 48 * 60 * 60 * 1000) {
+      syncRooms.delete(code);
+    }
+  }
+}, 30 * 60 * 1000);
+
+// Host or Peer publishes session state under a 5-digit code
+app.post('/api/sync/room', (req, res) => {
+  try {
+    const { code, state, deviceName } = req.body;
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Código de 5 dígitos requerido.' });
+    }
+    const cleanCode = code.trim().toUpperCase();
+    const existing = syncRooms.get(cleanCode);
+
+    const room: SyncRoom = {
+      code: cleanCode,
+      state: state || existing?.state || {},
+      createdAt: existing ? existing.createdAt : Date.now(),
+      lastUpdated: Date.now(),
+      devices: existing ? existing.devices : 1,
+      hostDevice: existing?.hostDevice || deviceName || 'PC Host',
+      guestDevice: existing?.guestDevice,
+    };
+
+    syncRooms.set(cleanCode, room);
+    console.log(`[SYNC RELAY] Sala ${cleanCode} registrada/actualizada con ${room.devices} dispositivos`);
+
+    return res.status(200).json({
+      status: 'success',
+      code: cleanCode,
+      devices: room.devices,
+      message: 'Sesión guardada en el relay de sincronización con código de 5 dígitos.',
+    });
+  } catch (err) {
+    console.error('Error creating sync room:', err);
+    return res.status(500).json({ error: 'Error del servidor al registrar sala de sincronización' });
+  }
+});
+
+// Other device joins and pulls the session state using the 5-digit code
+app.get('/api/sync/room/:code', (req, res) => {
+  try {
+    const { code } = req.params;
+    if (!code) {
+      return res.status(400).json({ error: 'Código requerido.' });
+    }
+    const cleanCode = code.trim().toUpperCase();
+    const room = syncRooms.get(cleanCode);
+
+    if (!room || !room.state) {
+      return res.status(404).json({
+        found: false,
+        error: `No se encontró ninguna sesión activa con el código "${cleanCode}". Verifica que el código de 5 dígitos sea correcto y que el otro dispositivo tenga la app abierta.`,
+      });
+    }
+
+    // Mark guest connected
+    room.devices = Math.max(room.devices, 2);
+    room.lastUpdated = Date.now();
+    room.guestDevice = req.query.device as string || 'Móvil Vinculado';
+
+    console.log(`[SYNC RELAY] Dispositivo conectado a sala ${cleanCode}. Total dispositivos: ${room.devices}`);
+
+    return res.status(200).json({
+      found: true,
+      code: room.code,
+      state: room.state,
+      devices: room.devices,
+      lastUpdated: room.lastUpdated,
+      message: '¡Sesión emparejada y sincronizada exitosamente!',
+    });
+  } catch (err) {
+    console.error('Error retrieving sync room:', err);
+    return res.status(500).json({ error: 'Error al consultar código de sincronización' });
+  }
+});
+
+// Check status of the room (used by the host to show peer connection indicator)
+app.get('/api/sync/room/:code/status', (req, res) => {
+  const { code } = req.params;
+  const cleanCode = (code || '').trim().toUpperCase();
+  const room = syncRooms.get(cleanCode);
+
+  if (!room) {
+    return res.status(404).json({ exists: false, code: cleanCode });
+  }
+
+  return res.status(200).json({
+    exists: true,
+    code: room.code,
+    devices: room.devices,
+    lastUpdated: room.lastUpdated,
+    hostDevice: room.hostDevice,
+    guestDevice: room.guestDevice,
+  });
+});
+
+
 // Mount Vite or serve static
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
