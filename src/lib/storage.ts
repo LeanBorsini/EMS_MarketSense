@@ -15,7 +15,28 @@ const STORAGE_KEYS = {
 export function loadStoredAccounts(): TradingAccount[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: TradingAccount[] = JSON.parse(raw);
+      // If user had the old 10k default for MT5 Demo, upgrade it to 100k
+      const migrated = parsed.map(acc => {
+        if (acc.id === 'acc-mt5-demo' && acc.initialBalance === 10000) {
+          return {
+            ...acc,
+            initialBalance: 100000,
+            currentBalance: 100840,
+            currentEquity: 100790,
+            startOfDayBalance: 100700,
+            riskRules: {
+              ...acc.riskRules,
+              maxRiskPerTradeUsd: 1000,
+              maxDailyLossUsd: 3000,
+            },
+          };
+        }
+        return acc;
+      });
+      return migrated;
+    }
   } catch (e) {
     console.warn('Error reading accounts from localStorage', e);
   }
@@ -33,7 +54,30 @@ export function saveStoredAccounts(accounts: TradingAccount[]) {
 export function loadStoredStrategies(): StrategyConfig[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.STRATEGIES);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: StrategyConfig[] = JSON.parse(raw);
+      // Merge with INITIAL_STRATEGIES to ensure mathematicalBasis is present
+      const merged = parsed.map(strat => {
+        const initial = INITIAL_STRATEGIES.find(init => init.id === strat.id);
+        if (initial && !strat.mathematicalBasis) {
+          return {
+            ...strat,
+            mathematicalBasis: initial.mathematicalBasis,
+            plainDescription: strat.plainDescription || initial.plainDescription,
+            entryConditionSummary: strat.entryConditionSummary || initial.entryConditionSummary,
+          };
+        }
+        return strat;
+      });
+
+      // Add any missing initial strategy (e.g. Connors RSI)
+      for (const init of INITIAL_STRATEGIES) {
+        if (!merged.some(s => s.id === init.id)) {
+          merged.push(init);
+        }
+      }
+      return merged;
+    }
   } catch (e) {
     console.warn('Error reading strategies from localStorage', e);
   }

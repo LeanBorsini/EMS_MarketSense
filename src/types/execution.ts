@@ -45,6 +45,20 @@ export interface TradingAccount {
   riskRules: AccountRiskRules;
 }
 
+export interface MathematicalBasis {
+  modelName: string;
+  formula: string;
+  hypothesis: string;
+  riskMath: string;
+  statisticalEdge: string;
+  mathParams?: {
+    periodN?: number;
+    sigmaThreshold?: number;
+    atrMultiplier?: number;
+    rsiThreshold?: number;
+  };
+}
+
 export interface StrategyConfig {
   id: string;
   name: string;
@@ -62,6 +76,11 @@ export interface StrategyConfig {
   winRate: number;
   totalTrades: number;
   profitFactor: number;
+  plainDescription?: string;
+  riskPerTradePercent?: number;
+  tradingSession?: string;
+  entryConditionSummary?: string;
+  mathematicalBasis?: MathematicalBasis;
   lastSignal?: {
     action: 'BUY' | 'SELL' | 'CLOSE';
     timestamp: string;

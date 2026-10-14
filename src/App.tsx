@@ -28,8 +28,10 @@ export default function App() {
     lastTickTime,
     switchAccount,
     updateAccountRiskRules,
+    updateAccountBalance,
     addAccount,
     addStrategy,
+    updateStrategy,
     toggleStrategyActive,
     placeManualTrade,
     closeTradeManual,
@@ -86,6 +88,7 @@ export default function App() {
             onMoveToBreakeven={moveToBreakevenManual}
             onOpenJournalDetail={(trade) => setSelectedJournalTrade(trade)}
             onNavigateToStrategy={() => setActiveTab('STRATEGY')}
+            onUpdateBalance={(newBal) => updateAccountBalance(activeAccount.id, newBal)}
           />
         )}
 
@@ -102,14 +105,16 @@ export default function App() {
             activeAccountId={activeAccountId}
             onSwitchAccount={switchAccount}
             onAddAccount={addAccount}
+            onUpdateBalance={updateAccountBalance}
           />
         )}
 
         {activeTab === 'STRATEGY' && (
           <SimpleStrategyBridge
             strategies={strategies}
-            activeAccountId={activeAccountId}
+            activeAccount={activeAccount}
             onAddStrategy={addStrategy}
+            onUpdateStrategy={updateStrategy}
             onToggleActive={toggleStrategyActive}
           />
         )}

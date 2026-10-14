@@ -25,6 +25,7 @@ interface SimpleBotControlProps {
   onMoveToBreakeven: (tradeId: string) => void;
   onOpenJournalDetail: (trade: TradeOrder) => void;
   onNavigateToStrategy: () => void;
+  onUpdateBalance: (newBalance: number) => void;
 }
 
 export const SimpleBotControl: React.FC<SimpleBotControlProps> = ({
@@ -37,10 +38,22 @@ export const SimpleBotControl: React.FC<SimpleBotControlProps> = ({
   onMoveToBreakeven,
   onOpenJournalDetail,
   onNavigateToStrategy,
+  onUpdateBalance,
 }) => {
+  const [isEditingBalance, setIsEditingBalance] = React.useState(false);
+  const [balanceInput, setBalanceInput] = React.useState(activeAccount.currentEquity);
+
   const isCircuitBreaker = activeAccount.status === 'CIRCUIT_BREAKER';
   const dailyPnL = activeAccount.currentEquity - activeAccount.startOfDayBalance;
   const isDailyPositive = dailyPnL >= 0;
+
+  const handleSaveBalance = (amount?: number) => {
+    const val = amount !== undefined ? amount : Number(balanceInput);
+    if (val && val > 0) {
+      onUpdateBalance(val);
+      setIsEditingBalance(false);
+    }
+  };
 
   return (
     <div className="max-w-xl mx-auto space-y-5">
@@ -78,17 +91,68 @@ export const SimpleBotControl: React.FC<SimpleBotControlProps> = ({
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {/* Balance Card */}
         <div className="ivory-card rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
-          <span className="text-xs font-semibold text-[#575B62]">
-            Tu Saldo Total
-          </span>
-          <div className="my-2">
-            <div className="font-mono text-xl sm:text-2xl font-bold text-[#191C21]">
-              ${activeAccount.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <div className="text-[11px] text-[#8C9098] font-mono mt-0.5">
-              {activeAccount.currency} • {activeAccount.broker}
-            </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#575B62]">
+              Tu Saldo Total
+            </span>
+            <button
+              onClick={() => {
+                setBalanceInput(activeAccount.currentEquity);
+                setIsEditingBalance(!isEditingBalance);
+              }}
+              className="text-[11px] text-[#2E4A35] font-semibold hover:underline cursor-pointer"
+            >
+              {isEditingBalance ? 'Cancelar' : 'Corregir'}
+            </button>
           </div>
+
+          {isEditingBalance ? (
+            <div className="my-2 space-y-2">
+              <input
+                type="number"
+                step="1000"
+                value={balanceInput}
+                onChange={e => setBalanceInput(Number(e.target.value))}
+                className="w-full bg-[#F3EFE6] border border-[#DDD8CD] rounded-lg px-2 py-1 text-xs font-mono font-bold text-[#191C21] focus:outline-none focus:border-[#2E4A35]"
+              />
+              <div className="flex gap-1">
+                {[50000, 100000, 200000].map(amt => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => handleSaveBalance(amt)}
+                    className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#EBF2EC] text-[#2E4A35] border border-[#C5DDCB] font-bold hover:bg-[#D7E8DA] cursor-pointer"
+                  >
+                    ${amt / 1000}k
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => handleSaveBalance()}
+                className="w-full py-1 rounded bg-[#2E4A35] text-[#F8F6F0] text-xs font-bold cursor-pointer"
+              >
+                Guardar Saldo
+              </button>
+            </div>
+          ) : (
+            <div className="my-2">
+              <div className="font-mono text-xl sm:text-2xl font-bold text-[#191C21]">
+                ${activeAccount.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#8C9098] font-mono mt-0.5">
+                <span>{activeAccount.currency} • {activeAccount.broker}</span>
+                {activeAccount.currentEquity < 50000 && (
+                  <button
+                    onClick={() => handleSaveBalance(100000)}
+                    className="text-[10px] font-sans font-bold text-[#2E4A35] bg-[#EBF2EC] hover:bg-[#D7E8DA] border border-[#C5DDCB] px-1.5 py-0.5 rounded cursor-pointer transition"
+                    title="Poner $100,000 USD de saldo en esta cuenta"
+                  >
+                    ⚡ Cambiar a $100k
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Today's Profit */}

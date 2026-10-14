@@ -276,6 +276,28 @@ export function useTradingEngine() {
     addLog('INFO', `Reglas de gestión de riesgo actualizadas para la cuenta seleccionada.`);
   };
 
+  const updateAccountBalance = (accountId: string, newBalance: number) => {
+    setAccounts(prev => prev.map(acc => {
+      if (acc.id !== accountId) return acc;
+      const riskUsd = (newBalance * acc.riskRules.maxRiskPerTradePercent) / 100;
+      const dailyLossUsd = (newBalance * acc.riskRules.maxDailyLossPercent) / 100;
+      return {
+        ...acc,
+        initialBalance: newBalance,
+        currentBalance: newBalance,
+        currentEquity: newBalance,
+        startOfDayBalance: newBalance,
+        floatingPnL: 0,
+        riskRules: {
+          ...acc.riskRules,
+          maxRiskPerTradeUsd: riskUsd,
+          maxDailyLossUsd: dailyLossUsd,
+        },
+      };
+    }));
+    addLog('SUCCESS', `Saldo de la cuenta actualizado a $${newBalance.toLocaleString('en-US')} USD.`);
+  };
+
   const addAccount = (newAccount: TradingAccount) => {
     setAccounts(prev => [...prev, newAccount]);
     setActiveAccountId(newAccount.id);
@@ -293,6 +315,15 @@ export function useTradingEngine() {
       const nextActive = !s.isActive;
       addLog('INFO', `Estrategia "${s.name}" ${nextActive ? 'ACTIVADA' : 'PAUSADA'}.`);
       return { ...s, isActive: nextActive };
+    }));
+  };
+
+  const updateStrategy = (strategyId: string, partial: Partial<StrategyConfig>) => {
+    setStrategies(prev => prev.map(s => {
+      if (s.id !== strategyId) return s;
+      const updated = { ...s, ...partial };
+      addLog('INFO', `Reglas actualizadas para la estrategia "${updated.name}".`);
+      return updated;
     }));
   };
 
@@ -416,8 +447,10 @@ export function useTradingEngine() {
     lastTickTime,
     switchAccount,
     updateAccountRiskRules,
+    updateAccountBalance,
     addAccount,
     addStrategy,
+    updateStrategy,
     toggleStrategyActive,
     placeManualTrade,
     closeTradeManual,
