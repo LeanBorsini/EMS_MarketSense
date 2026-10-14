@@ -400,6 +400,28 @@ export function useTradingEngine() {
     addLog('SUCCESS', `Nueva cuenta vinculada: ${newAccount.name} (${newAccount.broker})`);
   };
 
+  const removeAccount = (accountId: string): boolean => {
+    if (accounts.length <= 1) {
+      addLog('WARN', 'No es posible remover la única cuenta vinculada. Conecta o agrega otra cuenta antes de desvincular esta.');
+      return false;
+    }
+
+    const accToRemove = accounts.find(a => a.id === accountId);
+    const remaining = accounts.filter(a => a.id !== accountId);
+
+    setAccounts(remaining);
+
+    // If the active account is removed, auto-switch to the first remaining one
+    if (activeAccountId === accountId) {
+      const nextActive = remaining[0];
+      setActiveAccountId(nextActive.id);
+      addLog('INFO', `Cuenta activa cambiada automáticamente a: ${nextActive.name} (${nextActive.broker})`);
+    }
+
+    addLog('SUCCESS', `Cuenta desvinculada exitosamente: ${accToRemove?.name || accountId}`);
+    return true;
+  };
+
   const addStrategy = (newStrategy: StrategyConfig) => {
     setStrategies(prev => [newStrategy, ...prev]);
     addLog('SUCCESS', `Nueva estrategia de MarketSense añadida: ${newStrategy.name} [${newStrategy.symbol}]`);
@@ -545,6 +567,7 @@ export function useTradingEngine() {
     updateAccountRiskRules,
     updateAccountBalance,
     addAccount,
+    removeAccount,
     addStrategy,
     updateStrategy,
     toggleStrategyActive,

@@ -9,7 +9,8 @@ import {
   RefreshCw, 
   PlusCircle,
   HelpCircle,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 import { TradingAccount } from '../types/execution';
 
@@ -19,6 +20,7 @@ interface SettingsDrawerProps {
   accounts: TradingAccount[];
   activeAccountId: string;
   onSwitchAccount: (id: string) => void;
+  onNavigateToConnect?: () => void;
   onOpenSync: () => void;
   onOpenPwa: () => void;
   onOpenRunnerGuide: () => void;
@@ -32,6 +34,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   accounts,
   activeAccountId,
   onSwitchAccount,
+  onNavigateToConnect,
   onOpenSync,
   onOpenPwa,
   onOpenRunnerGuide,
@@ -86,6 +89,20 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 </div>
               ))}
             </div>
+
+            {onNavigateToConnect && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onNavigateToConnect();
+                }}
+                className="w-full py-2 px-3 text-center text-xs font-semibold text-[#2E4A35] bg-[#EBF2EC] hover:bg-[#D7E8DA] rounded-xl border border-[#C5DDCB] transition flex items-center justify-center gap-1.5 cursor-pointer mt-1"
+              >
+                <span>Gestionar, Vincular o Remover Cuentas</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Tools Menu */}

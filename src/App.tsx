@@ -30,6 +30,7 @@ export default function App() {
     updateAccountRiskRules,
     updateAccountBalance,
     addAccount,
+    removeAccount,
     addStrategy,
     updateStrategy,
     toggleStrategyActive,
@@ -123,6 +124,7 @@ export default function App() {
             activeAccountId={activeAccountId}
             onSwitchAccount={switchAccount}
             onAddAccount={addAccount}
+            onRemoveAccount={removeAccount}
             onUpdateBalance={updateAccountBalance}
             onSyncMetaTraderNow={syncWithMetaTraderNow}
             isSyncingMT5={isSyncingMT5}
@@ -155,6 +157,7 @@ export default function App() {
         accounts={accounts}
         activeAccountId={activeAccountId}
         onSwitchAccount={switchAccount}
+        onNavigateToConnect={() => setActiveTab('CONNECT')}
         onOpenSync={() => setIsSyncModalOpen(true)}
         onOpenPwa={() => setIsPwaModalOpen(true)}
         onOpenRunnerGuide={() => setIsRunnerGuideOpen(true)}

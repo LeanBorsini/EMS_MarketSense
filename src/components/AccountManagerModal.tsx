@@ -11,7 +11,8 @@ import {
   Lock, 
   DollarSign, 
   Percent, 
-  RefreshCw 
+  RefreshCw,
+  Trash2 
 } from 'lucide-react';
 import { TradingAccount, BrokerPlatform, AccountType } from '../types/execution';
 
@@ -23,6 +24,7 @@ interface AccountManagerModalProps {
   onSwitchAccount: (id: string) => void;
   onUpdateRiskRules: (id: string, rules: Partial<TradingAccount['riskRules']>) => void;
   onAddAccount: (acc: TradingAccount) => void;
+  onRemoveAccount?: (id: string) => void;
   onResetCircuitBreaker: (id: string) => void;
 }
 
@@ -34,6 +36,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   onSwitchAccount,
   onUpdateRiskRules,
   onAddAccount,
+  onRemoveAccount,
   onResetCircuitBreaker,
 }) => {
   const [activeTab, setActiveTab] = useState<'LIST' | 'RULES' | 'ADD'>('LIST');
@@ -215,21 +218,46 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                           </div>
                         </div>
 
-                        {isSelected ? (
-                          <span className="px-2 py-1 rounded bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> Activa
-                          </span>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSwitchAccount(acc.id);
-                            }}
-                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
-                          >
-                            Activar
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {isSelected ? (
+                            <span className="px-2 py-1 rounded bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" /> Activa
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSwitchAccount(acc.id);
+                              }}
+                              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer"
+                            >
+                              Activar
+                            </button>
+                          )}
+
+                          {onRemoveAccount && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (accounts.length <= 1) {
+                                  alert('No puedes eliminar la única cuenta vinculada. Conecta otra cuenta primero.');
+                                  return;
+                                }
+                                if (confirm(`¿Desvincular la cuenta "${acc.name}"?`)) {
+                                  onRemoveAccount(acc.id);
+                                }
+                              }}
+                              className={`p-1 rounded text-xs transition cursor-pointer ${
+                                accounts.length <= 1
+                                  ? 'text-slate-600 cursor-not-allowed'
+                                  : 'text-rose-400 hover:text-rose-300 hover:bg-rose-950/40'
+                              }`}
+                              title={accounts.length <= 1 ? 'Cuenta única (no se puede desvincular)' : 'Desvincular cuenta'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

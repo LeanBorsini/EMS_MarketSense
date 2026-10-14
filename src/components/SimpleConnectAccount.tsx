@@ -18,7 +18,11 @@ import {
   Terminal,
   Activity,
   Cpu,
-  Radio
+  Radio,
+  Trash2,
+  AlertTriangle,
+  Unlink,
+  X
 } from 'lucide-react';
 import { TradingAccount, BrokerPlatform, AccountType, MT5LiveSyncInfo } from '../types/execution';
 
@@ -27,6 +31,7 @@ interface SimpleConnectAccountProps {
   activeAccountId: string;
   onSwitchAccount: (id: string) => void;
   onAddAccount: (acc: TradingAccount) => void;
+  onRemoveAccount?: (id: string) => boolean | void;
   onUpdateBalance?: (accountId: string, newBalance: number) => void;
   onSyncMetaTraderNow?: () => void;
   isSyncingMT5?: boolean;
@@ -46,6 +51,7 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
   activeAccountId,
   onSwitchAccount,
   onAddAccount,
+  onRemoveAccount,
   onSyncMetaTraderNow,
   isSyncingMT5,
   mt5SyncInfo,
@@ -60,6 +66,8 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
   // Modals / code drawer tabs
   const [syncTab, setSyncTab] = useState<'EA' | 'PYTHON'>('EA');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [accountToDisconnect, setAccountToDisconnect] = useState<TradingAccount | null>(null);
+  const [disconnectNotice, setDisconnectNotice] = useState<string | null>(null);
 
   const activeAccount = accounts.find(a => a.id === activeAccountId) || accounts[0];
 
@@ -585,13 +593,33 @@ if __name__ == "__main__":
       {/* 5. Cuentas Vinculadas */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 space-y-3">
         <div className="flex items-center justify-between border-b border-[#EAE5DA] pb-2">
-          <span className="font-serif text-base font-bold text-[#191C21]">
-            Cuentas Vinculadas ({accounts.length})
-          </span>
-          <span className="text-xs text-[#8C9098]">
-            Sincronización en vivo
+          <div>
+            <span className="font-serif text-base font-bold text-[#191C21]">
+              Cuentas Vinculadas ({accounts.length})
+            </span>
+            <p className="text-xs text-[#8C9098]">
+              Cambia la cuenta activa o desvincula las que ya no utilices
+            </p>
+          </div>
+          <span className="text-xs text-[#2E4A35] font-semibold bg-[#EBF2EC] px-2.5 py-1 rounded-full border border-[#C5DDCB]">
+            ● Terminal Conectado
           </span>
         </div>
+
+        {disconnectNotice && (
+          <div className="p-3 rounded-xl bg-[#EBF2EC] border border-[#C5DDCB] text-xs text-[#2E4A35] flex items-center justify-between animate-fade-in">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#2E4A35]" />
+              <span>{disconnectNotice}</span>
+            </div>
+            <button 
+              onClick={() => setDisconnectNotice(null)}
+              className="text-[#2E4A35] hover:opacity-70 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         <div className="space-y-2.5">
           {accounts.map(acc => {
@@ -600,24 +628,28 @@ if __name__ == "__main__":
             return (
               <div
                 key={acc.id}
-                onClick={() => onSwitchAccount(acc.id)}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border transition-all ${
                   isSelected
                     ? 'bg-[#EBF2EC] border-[#2E4A35]/40 shadow-sm'
                     : 'bg-[#FDFCF9] border-[#E6E1D6] hover:bg-[#F3EFE6]'
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-[#2E4A35] ring-2 ring-[#2E4A35]/30 animate-pulse' : 'bg-[#DDD8CD]'}`} />
+                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isSelected ? 'bg-[#2E4A35] ring-2 ring-[#2E4A35]/30 animate-pulse' : 'bg-[#DDD8CD]'}`} />
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-xs sm:text-sm text-[#191C21]">
                           {acc.name}
                         </span>
                         <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#EAE5DA] text-[#575B62]">
                           {acc.type}
                         </span>
+                        {isSelected && (
+                          <span className="text-[10px] font-sans font-bold text-[#F8F6F0] bg-[#2E4A35] px-2 py-0.5 rounded-full">
+                            Activa para operar
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-[#575B62] font-mono mt-0.5">
                         {acc.broker} • #{acc.accountNumber} • {acc.serverName}
@@ -625,25 +657,55 @@ if __name__ == "__main__":
                     </div>
                   </div>
 
-                  <div className="text-right font-mono">
-                    <div className="font-bold text-xs sm:text-sm text-[#191C21]">
-                      ${acc.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <div className="flex items-center justify-end gap-1 mt-0.5">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 font-mono">
+                    <div className="text-left sm:text-right">
+                      <div className="font-bold text-xs sm:text-sm text-[#191C21]">
+                        ${acc.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
                       <span className="text-[10px] font-sans font-medium text-[#2E4A35] bg-[#D7E8DA] px-1.5 py-0.2 rounded">
                         ⚡ MT5 Live {acc.lastPingMs || 8}ms
                       </span>
-                      {isSelected && (
-                        <span className="text-[10px] font-sans font-bold text-[#F8F6F0] bg-[#2E4A35] px-1.5 py-0.2 rounded">
-                          Activa
-                        </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5">
+                      {!isSelected && (
+                        <button
+                          type="button"
+                          onClick={() => onSwitchAccount(acc.id)}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#2E4A35] hover:bg-[#233a2a] text-[#F8F6F0] font-sans text-xs font-semibold transition"
+                          title="Establecer como cuenta activa"
+                        >
+                          Activar
+                        </button>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (accounts.length <= 1) {
+                            setDisconnectNotice('No puedes desvincular la única cuenta activa. Conecta o añade otra cuenta antes de remover esta.');
+                            return;
+                          }
+                          setAccountToDisconnect(acc);
+                        }}
+                        className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-sans font-medium transition flex items-center gap-1 ${
+                          accounts.length <= 1
+                            ? 'bg-[#EAE5DA]/50 border-[#DDD8CD] text-[#A2A7B0] cursor-not-allowed'
+                            : 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300'
+                        }`}
+                        title={accounts.length <= 1 ? 'Cuenta única: conecta otra para poder desvincular esta' : 'Desvincular y remover cuenta'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Desvincular</span>
+                      </button>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-2 pt-2 border-t border-[#EAE5DA] flex items-center justify-between text-xs text-[#575B62]">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px]">Riesgo por trade (0.5%): <strong className="text-[#191C21] font-mono">${((acc.currentBalance * 0.5) / 100).toFixed(2)} USD</strong></span>
                     <span>•</span>
                     <span className="text-[11px]">Pérdida diaria máx (2.0%): <strong className="text-[#191C21] font-mono">${((acc.currentBalance * 2.0) / 100).toFixed(2)} USD</strong></span>
@@ -654,6 +716,94 @@ if __name__ == "__main__":
           })}
         </div>
       </div>
+
+      {/* Confirmation Modal to Disconnect Account */}
+      {accountToDisconnect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="ivory-card rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-5 sm:p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[#191C21]">
+                    ¿Desvincular cuenta?
+                  </h3>
+                  <p className="text-xs text-[#8C9098]">
+                    Remover cuenta del terminal bot
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAccountToDisconnect(null)} 
+                className="p-1 rounded-lg text-[#8C9098] hover:text-[#191C21]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[#F8F6F0] border border-[#E6E1D6] space-y-1.5 text-xs">
+              <div className="flex justify-between font-semibold text-[#191C21]">
+                <span>Cuenta:</span>
+                <span>{accountToDisconnect.name}</span>
+              </div>
+              <div className="flex justify-between text-[#575B62]">
+                <span>Broker / Servidor:</span>
+                <span>{accountToDisconnect.broker} • {accountToDisconnect.serverName}</span>
+              </div>
+              <div className="flex justify-between text-[#575B62]">
+                <span>N° Cuenta:</span>
+                <span className="font-mono">#{accountToDisconnect.accountNumber}</span>
+              </div>
+              <div className="flex justify-between text-[#575B62]">
+                <span>Saldo actual:</span>
+                <span className="font-mono font-bold text-[#2E4A35]">
+                  ${accountToDisconnect.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#575B62] leading-relaxed">
+              {accountToDisconnect.id === activeAccountId ? (
+                <span className="text-amber-800 font-medium">
+                  ⚠️ Esta es tu cuenta activa actualmente. Al removerla, el bot pasará automáticamente a operar con la siguiente cuenta vinculada disponible.
+                </span>
+              ) : (
+                'Esta cuenta se desconectará del bot. No se ejecutarán operaciones sobre ella.'
+              )}
+              <br />
+              <span className="text-[11px] text-[#8C9098] mt-1 block">
+                Podrás volver a vincularla en cualquier momento si deseas volver a utilizarla.
+              </span>
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#EAE5DA]">
+              <button
+                type="button"
+                onClick={() => setAccountToDisconnect(null)}
+                className="px-4 py-2 rounded-xl border border-[#DDD8CD] text-xs font-semibold text-[#575B62] hover:bg-[#EFECE4] transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onRemoveAccount) {
+                    onRemoveAccount(accountToDisconnect.id);
+                  }
+                  setDisconnectNotice(`Cuenta "${accountToDisconnect.name}" desvinculada exitosamente.`);
+                  setAccountToDisconnect(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Sí, Desvincular Cuenta</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
