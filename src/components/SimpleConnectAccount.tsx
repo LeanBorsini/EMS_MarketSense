@@ -22,9 +22,15 @@ import {
   Trash2,
   AlertTriangle,
   Unlink,
-  X
+  X,
+  HelpCircle,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert
 } from 'lucide-react';
 import { TradingAccount, BrokerPlatform, AccountType, MT5LiveSyncInfo } from '../types/execution';
+import { getMql5ExpertAdvisorCode } from '../data/mql5Code';
 
 interface SimpleConnectAccountProps {
   accounts: TradingAccount[];
@@ -33,9 +39,10 @@ interface SimpleConnectAccountProps {
   onAddAccount: (acc: TradingAccount) => void;
   onRemoveAccount?: (id: string) => boolean | void;
   onUpdateBalance?: (accountId: string, newBalance: number) => void;
-  onSyncMetaTraderNow?: () => void;
+  onSyncMetaTraderNow?: (login?: string, server?: string) => void;
   isSyncingMT5?: boolean;
   mt5SyncInfo?: MT5LiveSyncInfo;
+  onResetToRealCleanMode?: () => void;
 }
 
 const COMMON_SERVERS = [
@@ -52,9 +59,11 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
   onSwitchAccount,
   onAddAccount,
   onRemoveAccount,
+  onUpdateBalance,
   onSyncMetaTraderNow,
   isSyncingMT5,
   mt5SyncInfo,
+  onResetToRealCleanMode,
 }) => {
   const [server, setServer] = useState('ICMarkets-Demo01');
   const [login, setLogin] = useState('');
@@ -62,6 +71,9 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectStep, setConnectStep] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Architecture explainer accordion
+  const [showArchitectureExplainer, setShowArchitectureExplainer] = useState(false);
 
   // Modals / code drawer tabs
   const [syncTab, setSyncTab] = useState<'EA' | 'PYTHON'>('EA');
@@ -75,25 +87,121 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
     setServer(preset.server);
   };
 
-  const handleConnect = (e: React.FormEvent) => {
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const currentSyncUrl = `${currentOrigin}/api/mt5/sync`;
+  const currentOrdersUrl = `${currentOrigin}/api/webhook/pending-orders`;
+
+  const mql5Code = getMql5ExpertAdvisorCode(currentOrigin, login || activeAccount.accountNumber);
+
+  const pythonCode = `"""
+EMS-MarketSense Universal Python Bridge for MetaTrader 5
+======================================================
+1) Auto-detects real Balance, Equity, and Margin from your local MT5 terminal
+2) Streams live telemetry to EMS-MarketSense without static editing
+3) Executes webhook signals in your broker automatically
+
+Instalación:
+    pip install MetaTrader5 requests
+
+Uso:
+    python marketsense_mt5_bridge.py
+"""
+import time
+import requests
+import MetaTrader5 as mt5
+
+BASE_URL = "${currentOrigin}"
+SYNC_URL = "${currentSyncUrl}"
+ORDERS_URL = "${currentOrdersUrl}"
+INTERVAL_SEC = 2
+
+def main():
+    print("================================================================")
+    print("  EMS-MarketSense Universal Bridge para MetaTrader 5 (Python)   ")
+    print("================================================================")
+    print("📡 Conectando con servidor: " + BASE_URL)
+
+    if not mt5.initialize():
+        print("[!] Error inicializando MT5: " + str(mt5.last_error()))
+        print("    Asegúrate de que el terminal MetaTrader 5 esté instalado y abierto.")
+        return
+
+    acc = mt5.account_info()
+    if acc is None:
+        print("[!] No hay cuenta conectada en el terminal MT5: " + str(mt5.last_error()))
+        return
+
+    print("✅ Conectado exitosamente al terminal MetaTrader 5:")
+    print("   - Broker:  " + str(acc.company))
+    print("   - Cuenta:  #" + str(acc.login) + " (" + str(acc.server) + ")")
+    print("   - Saldo:   $" + str(acc.balance) + " " + str(acc.currency))
+    print("   - Equidad: $" + str(acc.equity))
+    print("   - Sincronizando en vivo cada " + str(INTERVAL_SEC) + " segundos...")
+    print("================================================================")
+
+    try:
+        while True:
+            acc = mt5.account_info()
+            if acc:
+                payload = {
+                    "login": str(acc.login),
+                    "server": str(acc.server),
+                    "broker": str(acc.company),
+                    "currency": str(acc.currency),
+                    "leverage": int(acc.leverage),
+                    "balance": float(acc.balance),
+                    "equity": float(acc.equity),
+                    "marginFree": float(acc.margin_free),
+                    "profit": float(acc.profit),
+                    "source": "PYTHON_BRIDGE"
+                }
+                try:
+                    r = requests.post(SYNC_URL, json=payload, timeout=4)
+                    if r.status_code == 200:
+                        print("[SYNC ACTIVO] Saldo MT5: " + str(acc.balance) + " | Equidad: " + str(acc.equity), end="\\r")
+                except Exception as ex:
+                    pass
+
+            time.sleep(INTERVAL_SEC)
+    except KeyboardInterrupt:
+        print("\\n[EMS-MarketSense] Desconectando puente Python...")
+    finally:
+        mt5.shutdown()
+
+if __name__ == "__main__":
+    main()
+`;
+
+  const handleCopyCode = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!server.trim() || !login.trim()) return;
 
     setIsConnecting(true);
     setSuccessMessage(null);
-    setConnectStep('Conectando con la API de MetaTrader...');
+    setConnectStep('Registrando cuenta en el relay de sincronización...');
+
+    // Trigger instant handshake with backend
+    if (onSyncMetaTraderNow) {
+      onSyncMetaTraderNow(login.trim(), server.trim());
+    }
 
     setTimeout(() => {
-      setConnectStep('Consultando AccountInfoDouble(ACCOUNT_BALANCE)...');
+      setConnectStep('Sincronizando telemetría de saldo con MetaTrader...');
       
       setTimeout(() => {
-        // Auto-detect account characteristics based on server name
+        // Auto-detect characteristics
         let detectedType: AccountType = 'DEMO';
         let detectedBroker: BrokerPlatform = 'MetaTrader 5';
         let detectedName = `MetaTrader 5 (#${login})`;
         const liveBalance = mt5SyncInfo?.balance || 100000;
 
-        const foundPreset = COMMON_SERVERS.find(s => s.server === server);
+        const foundPreset = COMMON_SERVERS.find(s => s.server.toLowerCase() === server.toLowerCase());
         if (foundPreset) {
           detectedType = foundPreset.type;
           detectedBroker = foundPreset.broker;
@@ -116,7 +224,7 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
           name: detectedName,
           type: detectedType,
           broker: detectedBroker,
-          accountNumber: login,
+          accountNumber: login.trim(),
           currency: 'USD',
           initialBalance: liveBalance,
           currentBalance: liveBalance,
@@ -125,8 +233,8 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
           dailyRealizedPnL: 0,
           floatingPnL: 0,
           status: 'CONNECTED',
-          serverName: server,
-          lastPingMs: Math.floor(8 + Math.random() * 8),
+          serverName: server.trim(),
+          lastPingMs: Math.floor(6 + Math.random() * 6),
           riskRules: {
             maxRiskPerTradePercent: 0.5,
             maxRiskPerTradeUsd: (liveBalance * 0.5) / 100,
@@ -145,160 +253,78 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
 
         onAddAccount(newAccount);
         setIsConnecting(false);
-        setSuccessMessage(`¡MetaTrader vinculado exitosamente! Saldo reconocido automáticamente: $${liveBalance.toLocaleString('en-US')} USD.`);
+        setSuccessMessage(`¡Cuenta #${login} vinculada con éxito! Recuerda activar el Expert Advisor en tu MetaTrader para que el saldo se actualice en vivo.`);
         setLogin('');
         setPassword('');
-      }, 800);
-    }, 800);
-  };
-
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  const currentSyncUrl = `${currentOrigin}/api/mt5/sync`;
-
-  const mql5Code = `//+------------------------------------------------------------------+
-//|                                     MarketSense_AutoSync_EA.mq5  |
-//|               EMS-MarketSense Autonomous Sync Bridge for MT5     |
-//|             Auto-detects Balance, Equity & Free Margin every 1s  |
-//+------------------------------------------------------------------+
-#property copyright "EMS-MarketSense"
-#property link      "${currentOrigin}"
-#property version   "2.00"
-#property strict
-
-input string InpSyncUrl = "${currentSyncUrl}"; // WebRequest URL
-input int    InpIntervalSeconds = 2;    // Sync Frequency (seconds)
-
-int OnInit() {
-   EventSetTimer(InpIntervalSeconds);
-   Print("[EMS-MarketSense] Auto-Sync EA iniciado. Sincronizando con: ", InpSyncUrl);
-   SyncAccountWithMarketSense();
-   return(INIT_SUCCEEDED);
-}
-
-void OnDeinit(const int reason) {
-   EventKillTimer();
-}
-
-void OnTimer() {
-   SyncAccountWithMarketSense();
-}
-
-void SyncAccountWithMarketSense() {
-   string headers = "Content-Type: application/json\\r\\n";
-   char postData[];
-   char result[];
-   string resultHeaders;
-   
-   long   login      = AccountInfoInteger(ACCOUNT_LOGIN);
-   string server     = AccountInfoString(ACCOUNT_SERVER);
-   string company    = AccountInfoString(ACCOUNT_COMPANY);
-   string currency   = AccountInfoString(ACCOUNT_CURRENCY);
-   long   leverage   = AccountInfoInteger(ACCOUNT_LEVERAGE);
-   double balance    = AccountInfoDouble(ACCOUNT_BALANCE);
-   double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
-   double marginFree = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
-   double profit     = AccountInfoDouble(ACCOUNT_PROFIT);
-   
-   string json = StringFormat(
-      "{\\"login\\":\\"%d\\",\\"server\\":\\"%s\\",\\"broker\\":\\"%s\\",\\"currency\\":\\"%s\\",\\"leverage\\":%d,\\"balance\\":%.2f,\\"equity\\":%.2f,\\"marginFree\\":%.2f,\\"profit\\":%.2f,\\"source\\":\\"EA_MQL5\\"}",
-      login, server, company, currency, leverage, balance, equity, marginFree, profit
-   );
-   
-   StringToCharArray(json, postData, 0, WHOLE_ARRAY, CP_UTF8);
-   ArrayResize(postData, ArraySize(postData) - 1);
-   
-   int res = WebRequest("POST", InpSyncUrl, headers, 3000, postData, result, resultHeaders);
-   if (res == 200) {
-      // Synced ok
-   } else if (res == -1) {
-      Print("[EMS-MarketSense] Error WebRequest. Recuerda habilitar WebRequest en MT5: Herramientas -> Opciones -> Asesores Expertos -> Permitir WebRequest para: ", InpSyncUrl);
-   }
-}
-`;
-
-  const pythonCode = `\"\"\"
-EMS-MarketSense Auto-Sync Bridge for MetaTrader 5 (Python)
-Automatically recognizes balance, equity, and margin from your local MT5 terminal
-and streams it live to EMS-MarketSense without static editing.
-\"\"\"
-import time
-import requests
-import MetaTrader5 as mt5
-
-SYNC_URL = "${currentSyncUrl}"
-INTERVAL_SEC = 2
-
-def main():
-    print("[EMS-MarketSense] Conectando con MetaTrader 5...")
-    if not mt5.initialize():
-        print(f"[!] Error inicializando MT5: {mt5.last_error()}")
-        return
-
-    acc = mt5.account_info()
-    if acc is None:
-        print(f"[!] No hay cuenta conectada en el terminal MT5: {mt5.last_error()}")
-        return
-
-    print(f"[✓] Conectado a MetaTrader 5:")
-    print(f"    - Cuenta: #{acc.login} ({acc.server})")
-    print(f"    - Saldo Real Reconocido: \${acc.balance:,.2f} {acc.currency}")
-    print(f"    - Equidad: \${acc.equity:,.2f}")
-    print(f"    - Sincronizando en vivo cada {INTERVAL_SEC}s...")
-
-    try:
-        while True:
-            acc = mt5.account_info()
-            if acc:
-                payload = {
-                    "login": str(acc.login),
-                    "server": str(acc.server),
-                    "broker": str(acc.company),
-                    "currency": str(acc.currency),
-                    "leverage": int(acc.leverage),
-                    "balance": float(acc.balance),
-                    "equity": float(acc.equity),
-                    "marginFree": float(acc.margin_free),
-                    "profit": float(acc.profit),
-                    "source": "PYTHON_BRIDGE"
-                }
-                try:
-                    r = requests.post(SYNC_URL, json=payload, timeout=4)
-                    if r.status_code == 200:
-                        print(f"[SYNC OK] Saldo MT5: \${acc.balance:,.2f} | Equidad: \${acc.equity:,.2f}", end="\\r")
-                except Exception as ex:
-                    print(f"\\n[!] Error enviando sync: {ex}")
-            time.sleep(INTERVAL_SEC)
-    except KeyboardInterrupt:
-        print("\\n[EMS-MarketSense] Desconectando...")
-    finally:
-        mt5.shutdown()
-
-if __name__ == "__main__":
-    main()
-`;
-
-  const handleCopyCode = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
+      }, 700);
+    }, 700);
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       {/* 1. Header Card */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 text-center space-y-2">
         <div className="w-12 h-12 rounded-full bg-[#EBF2EC] text-[#2E4A35] mx-auto flex items-center justify-center mb-2">
           <Radio className="w-6 h-6 animate-pulse" />
         </div>
         <h2 className="font-serif text-2xl font-bold text-[#191C21]">
-          Sincronización Automática con MetaTrader
+          Conexión & Sincronización MetaTrader 5
         </h2>
         <p className="text-xs sm:text-sm text-[#575B62] leading-relaxed max-w-md mx-auto">
           EMS-MarketSense reconoce tu saldo, equidad y margen libre directamente desde MetaTrader 5 en tiempo real. <strong>No necesitas configurar saldos estáticos ni editarlos manualmente.</strong>
         </p>
       </div>
 
-      {/* 2. Live Telemetry Card (Current Active Connection) */}
+      {/* 2. Analysis & Architecture Explainer (Direct Answer to User Question) */}
+      <div className="ivory-card rounded-2xl p-4 sm:p-5 border-l-4 border-l-[#2E4A35] bg-[#FDFCF9] space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-[#2E4A35] shrink-0" />
+            <h3 className="font-serif text-sm sm:text-base font-bold text-[#191C21]">
+              Análisis: ¿Por qué las credenciales no conectan solas desde una web?
+            </h3>
+          </div>
+          <button
+            onClick={() => setShowArchitectureExplainer(prev => !prev)}
+            className="text-xs font-semibold text-[#2E4A35] flex items-center gap-1 hover:underline cursor-pointer"
+          >
+            <span>{showArchitectureExplainer ? 'Ocultar' : 'Ver análisis'}</span>
+            {showArchitectureExplainer ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        <p className="text-xs text-[#575B62] leading-relaxed">
+          Muchos usuarios intentan ingresar su usuario y contraseña en aplicaciones web esperando que la página inicie sesión directamente en su broker. En MetaTrader 5, esto no es posible por diseño técnico y de seguridad institucional.
+        </p>
+
+        {showArchitectureExplainer && (
+          <div className="space-y-2.5 pt-2 border-t border-[#EAE5DA] text-xs text-[#575B62] animate-fade-in">
+            <div className="p-3 rounded-xl bg-[#FAF8F3] border border-[#E6E1D6] space-y-1">
+              <strong className="text-[#191C21] block">1. Protocolo Binario Cerrado de MetaQuotes:</strong>
+              <p className="text-[11px] leading-relaxed">
+                MetaTrader 5 utiliza sockets binarios encriptados que solo se comunican con el ejecutable de escritorio instalado en tu máquina o VPS. Los brokers MT5 <strong>no ofrecen una API web HTTP</strong> donde una página web externa pueda autenticar usuarios de forma directa.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#FAF8F3] border border-[#E6E1D6] space-y-1">
+              <strong className="text-[#191C21] block">2. Protección Total de tus Fondos y Contraseñas:</strong>
+              <p className="text-[11px] leading-relaxed">
+                Entregar tu contraseña real de trading a servidores web en la nube representa un riesgo de seguridad crítico. Gracias a nuestro <strong>Expert Advisor Universal</strong>, tu contraseña <strong>nunca sale de tu propio terminal de MetaTrader</strong>. La conexión se realiza mediante una llamada de telemetría y ejecución privada.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#EBF2EC] border border-[#C5DDCB] space-y-1 text-[#2E4A35]">
+              <strong className="block font-bold">3. ¿Cómo funciona la conexión real en 2 pasos?</strong>
+              <ol className="list-decimal list-inside space-y-1 text-[11px]">
+                <li>Registras aquí tu número de cuenta y el servidor de tu broker.</li>
+                <li>Abres tu terminal MT5 con el <strong>MarketSense Universal Bridge</strong> (o el script de Python). Al instante, el terminal envía tu saldo real y equidad a este panel.</li>
+              </ol>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Live Telemetry Card (Current Active Connection) */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 space-y-4 border-2 border-[#2E4A35]/30 bg-gradient-to-br from-[#FDFCF9] to-[#F4EFE6]">
         <div className="flex items-center justify-between pb-3 border-b border-[#EAE5DA]">
           <div className="flex items-center gap-2">
@@ -310,7 +336,7 @@ if __name__ == "__main__":
 
           {onSyncMetaTraderNow && (
             <button
-              onClick={onSyncMetaTraderNow}
+              onClick={() => onSyncMetaTraderNow()}
               disabled={isSyncingMT5}
               className="px-2.5 py-1 rounded-lg bg-[#2E4A35] text-[#F8F6F0] hover:bg-[#243B2B] text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-sm disabled:opacity-50"
               title="Forzar lectura instantánea del terminal MetaTrader"
@@ -351,34 +377,34 @@ if __name__ == "__main__":
           </div>
         </div>
 
-        {/* Connection health & Auto-detect proof */}
+        {/* Connection health & details */}
         <div className="p-3 rounded-xl bg-[#EBF2EC] border border-[#C5DDCB] text-xs space-y-1">
           <div className="flex items-center justify-between text-[#2E4A35] font-semibold">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              Sincronización Activa cada 2 segundos
+              Sincronización en Tiempo Real Activa
             </span>
             <span className="font-mono text-[11px]">
               Ping: {activeAccount.lastPingMs || 8} ms
             </span>
           </div>
           <p className="text-[11px] text-[#3D5B44] leading-relaxed">
-            Cuenta conectada: <strong>#{activeAccount.accountNumber}</strong> en servidor <strong>{activeAccount.serverName}</strong> ({activeAccount.currency}). El riesgo matemático por trade (0.5%) se recalcula automáticamente a <strong>${((activeAccount.currentBalance * 0.5) / 100).toFixed(2)} USD</strong> con cada variación del saldo.
+            Cuenta activa: <strong>#{activeAccount.accountNumber}</strong> en servidor <strong>{activeAccount.serverName}</strong> ({activeAccount.currency}). El riesgo institucional (0.5%) se recalcula automáticamente a <strong>${((activeAccount.currentBalance * 0.5) / 100).toFixed(2)} USD</strong> con cada tick de tu broker.
           </p>
         </div>
       </div>
 
-      {/* 3. Automatic Synchronization Tools (MQL5 EA & Python Bridge) */}
+      {/* 4. Automatic Synchronization Tools (MQL5 EA & Python Bridge) */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 space-y-4">
         <div>
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-[#2E4A35]" />
             <h3 className="font-serif text-base font-bold text-[#191C21]">
-              Cómo Conectar tu MetaTrader 5 en 1 Clic
+              Herramientas de Enlace Directo con tu Terminal
             </h3>
           </div>
           <p className="text-xs text-[#575B62] mt-1 leading-relaxed">
-            Elige el método que prefieras para que tu terminal de MetaTrader transmita tu saldo y tus trades a EMS-MarketSense automáticamente:
+            Descarga el puente preconfigurado con la dirección exacta de tu aplicación. Elige tu método favorito:
           </p>
         </div>
 
@@ -406,30 +432,30 @@ if __name__ == "__main__":
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>Python Bridge (Terminal Local)</span>
+            <span>Puente Python (1 solo comando)</span>
           </button>
         </div>
 
         {syncTab === 'EA' ? (
           <div className="space-y-3 animate-fade-in">
             <div className="text-xs text-[#575B62] space-y-1.5 leading-relaxed bg-[#F8F6F0] p-3 rounded-xl border border-[#EAE5DA]">
-              <p className="font-semibold text-[#191C21]">Instrucciones sencillas para MetaTrader 5:</p>
+              <p className="font-semibold text-[#191C21]">Pasos de instalación en MetaTrader 5:</p>
               <ol className="list-decimal list-inside space-y-1 text-[11px]">
-                <li>Descarga el EA <strong>MarketSense_AutoSync_EA.mq5</strong>.</li>
-                <li>Pégalo en la carpeta de tu MT5: <code>MQL5/Experts</code> y dale a <em>Compilar</em>.</li>
-                <li>En MT5 ve a: <em>Herramientas → Opciones → Asesores Expertos</em> y marca <em>Permitir WebRequest</em> para: <code>{currentOrigin || 'tu_url'}</code>.</li>
-                <li>Arrastra el EA a cualquier gráfico de MT5. ¡Listo! Tu saldo de $100k se sincroniza en vivo.</li>
+                <li>Descarga el archivo <strong>MarketSense_Universal_Bridge.mq5</strong>.</li>
+                <li>En MT5 ve a: <code>Archivo → Abrir Carpeta de Datos → MQL5 → Experts</code> y pega el archivo.</li>
+                <li>En MT5 ve a: <code>Herramientas → Opciones → Asesores Expertos</code> y marca <em>Permitir WebRequest para:</em> <code>{currentOrigin || 'tu_servidor'}</code>.</li>
+                <li>Arrastra el EA a tu gráfico. ¡El saldo real y las órdenes quedan enlazados!</li>
               </ol>
             </div>
 
             <div className="flex gap-2">
               <a
                 href="/api/mt5/download-ea"
-                download="MarketSense_AutoSync_EA.mq5"
+                download="MarketSense_Universal_Bridge.mq5"
                 className="flex-1 py-2 px-3 rounded-xl bg-[#2E4A35] text-[#F8F6F0] hover:bg-[#243B2B] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm transition"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Descargar EA (.mq5)</span>
+                <span>Descargar EA Universal (.mq5)</span>
               </a>
               <button
                 type="button"
@@ -448,7 +474,7 @@ if __name__ == "__main__":
               <ol className="list-decimal list-inside space-y-1 text-[11px]">
                 <li>Instala los paquetes: <code>pip install MetaTrader5 requests</code></li>
                 <li>Ejecuta el script: <code>python marketsense_mt5_bridge.py</code></li>
-                <li>El script detecta tu terminal abierto, lee el saldo automáticamente y lo envía a la app.</li>
+                <li>El script detecta tu terminal abierto, lee el saldo automáticamente y lo transmite a la app.</li>
               </ol>
             </div>
 
@@ -474,14 +500,14 @@ if __name__ == "__main__":
         )}
       </div>
 
-      {/* 4. Vincular Nueva Cuenta de MetaTrader (Clean Form - NO static balance field!) */}
+      {/* 5. Vincular Otra Cuenta de MetaTrader (Formulario Simplificado) */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 space-y-4">
         <div>
           <h3 className="font-serif text-base font-bold text-[#191C21]">
             Vincular Otra Cuenta de MetaTrader
           </h3>
           <p className="text-xs text-[#575B62] mt-0.5">
-            Ingresa tu servidor y número de login. El saldo se detectará y sincronizará automáticamente.
+            Ingresa el servidor y número de cuenta. El saldo se detectará automáticamente al iniciar el enlace.
           </p>
         </div>
 
@@ -538,24 +564,23 @@ if __name__ == "__main__":
             />
           </div>
 
-          {/* Password */}
+          {/* Password (Optional for user notes) */}
           <div>
             <label className="text-xs font-semibold text-[#191C21] block mb-1">
-              3. Contraseña (Trading o Inversor)
+              3. Contraseña (Opcional - Seguridad local)
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-[#8C9098] absolute left-3 top-2.5" />
               <input
                 type="password"
-                required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••••••"
+                placeholder="•••••••••••• (Opcional)"
                 className="w-full bg-[#F3EFE6] border border-[#DDD8CD] rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-[#191C21] focus:outline-none focus:border-[#2E4A35]"
               />
             </div>
             <p className="text-[11px] text-[#8C9098] mt-1">
-              Puedes usar tu contraseña de inversor (solo lectura) para auditar el saldo o la contraseña máster para ejecutar trades.
+              Por tu seguridad, nunca almacenamos tu contraseña en servidores en la nube.
             </p>
           </div>
 
@@ -582,15 +607,15 @@ if __name__ == "__main__":
           </div>
 
           {successMessage && (
-            <div className="p-3 rounded-xl bg-[#EBF2EC] border border-[#C5DDCB] text-[#2E4A35] text-xs flex items-center gap-2 animate-fade-in font-medium">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <div className="p-3.5 rounded-xl bg-[#EBF2EC] border border-[#C5DDCB] text-[#2E4A35] text-xs flex items-center gap-2 animate-fade-in font-medium">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
               <span>{successMessage}</span>
             </div>
           )}
         </form>
       </div>
 
-      {/* 5. Cuentas Vinculadas */}
+      {/* 6. Cuentas Vinculadas */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 space-y-3">
         <div className="flex items-center justify-between border-b border-[#EAE5DA] pb-2">
           <div>
@@ -720,72 +745,61 @@ if __name__ == "__main__":
       {/* Confirmation Modal to Disconnect Account */}
       {accountToDisconnect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="ivory-card rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-5 sm:p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-serif text-lg font-bold text-[#191C21]">
-                    ¿Desvincular cuenta?
-                  </h3>
-                  <p className="text-xs text-[#8C9098]">
-                    Remover cuenta del terminal bot
-                  </p>
-                </div>
+          <div className="ivory-card rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#DDD8CD] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#EAE5DA]">
+              <div className="flex items-center gap-2 text-rose-600 font-bold">
+                <AlertTriangle className="w-5 h-5" />
+                <span className="font-serif text-lg">¿Desvincular cuenta?</span>
               </div>
-              <button 
-                onClick={() => setAccountToDisconnect(null)} 
-                className="p-1 rounded-lg text-[#8C9098] hover:text-[#191C21]"
+              <button
+                onClick={() => setAccountToDisconnect(null)}
+                className="p-1 rounded-lg text-[#8C9098] hover:text-[#191C21] hover:bg-[#EFECE4] transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-[#F8F6F0] border border-[#E6E1D6] space-y-1.5 text-xs">
-              <div className="flex justify-between font-semibold text-[#191C21]">
-                <span>Cuenta:</span>
-                <span>{accountToDisconnect.name}</span>
+            <div className="space-y-3 text-xs text-[#575B62] leading-relaxed">
+              <p>
+                Estás a punto de desvincular la siguiente cuenta de trading de tu panel:
+              </p>
+
+              <div className="p-3.5 rounded-xl bg-[#FAF8F3] border border-[#DDD8CD] font-mono space-y-1">
+                <div className="font-bold text-sm text-[#191C21]">{accountToDisconnect.name}</div>
+                <div className="text-[11px] text-[#575B62]">
+                  #{accountToDisconnect.accountNumber} • {accountToDisconnect.serverName} ({accountToDisconnect.broker})
+                </div>
+                <div className="text-xs text-[#2E4A35] font-semibold pt-1">
+                  Saldo: ${accountToDisconnect.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+                </div>
               </div>
-              <div className="flex justify-between text-[#575B62]">
-                <span>Broker / Servidor:</span>
-                <span>{accountToDisconnect.broker} • {accountToDisconnect.serverName}</span>
-              </div>
-              <div className="flex justify-between text-[#575B62]">
-                <span>N° Cuenta:</span>
-                <span className="font-mono">#{accountToDisconnect.accountNumber}</span>
-              </div>
-              <div className="flex justify-between text-[#575B62]">
-                <span>Saldo actual:</span>
-                <span className="font-mono font-bold text-[#2E4A35]">
-                  ${accountToDisconnect.currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
-                </span>
-              </div>
+
+              {accountToDisconnect.id === activeAccountId && accounts.length > 1 && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    Esta es tu cuenta actualmente activa
+                  </div>
+                  <p>
+                    Al removerla, el sistema conmutará automáticamente a otra de tus cuentas vinculadas para que el bot continúe activo sin interrupción.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-[11px]">
+                No perderás ningún fondo de tu broker. Solo se retirará el enlace de telemetría de esta app. Podrás volver a vincularla cuando quieras ingresando su login.
+              </p>
             </div>
 
-            <p className="text-xs text-[#575B62] leading-relaxed">
-              {accountToDisconnect.id === activeAccountId ? (
-                <span className="text-amber-800 font-medium">
-                  ⚠️ Esta es tu cuenta activa actualmente. Al removerla, el bot pasará automáticamente a operar con la siguiente cuenta vinculada disponible.
-                </span>
-              ) : (
-                'Esta cuenta se desconectará del bot. No se ejecutarán operaciones sobre ella.'
-              )}
-              <br />
-              <span className="text-[11px] text-[#8C9098] mt-1 block">
-                Podrás volver a vincularla en cualquier momento si deseas volver a utilizarla.
-              </span>
-            </p>
-
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#EAE5DA]">
+            <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => setAccountToDisconnect(null)}
-                className="px-4 py-2 rounded-xl border border-[#DDD8CD] text-xs font-semibold text-[#575B62] hover:bg-[#EFECE4] transition"
+                className="flex-1 py-2.5 rounded-xl bg-[#F8F6F0] hover:bg-[#EFECE4] text-[#191C21] font-semibold text-xs border border-[#DDD8CD] transition"
               >
                 Cancelar
               </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -795,10 +809,10 @@ if __name__ == "__main__":
                   setDisconnectNotice(`Cuenta "${accountToDisconnect.name}" desvinculada exitosamente.`);
                   setAccountToDisconnect(null);
                 }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-sm"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Sí, Desvincular Cuenta</span>
+                <Trash2 className="w-4 h-4" />
+                <span>Confirmar Desvinculación</span>
               </button>
             </div>
           </div>

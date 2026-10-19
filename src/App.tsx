@@ -13,6 +13,7 @@ import { TradeJournalDetailModal } from './components/TradeJournalDetailModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
 import { PWAInstallModal } from './components/PWAInstallModal';
 import { RunnerGuideModal } from './components/RunnerGuideModal';
+import { PythonDirectTab } from './components/PythonDirectTab';
 import { TradeOrder } from './types/execution';
 
 export default function App() {
@@ -41,16 +42,18 @@ export default function App() {
     toggleDaemon,
     emergencyPanicCloseAll,
     resetCircuitBreaker,
+    resetToRealCleanMode,
     addLog,
     mt5SyncInfo,
     isSyncingMT5,
     syncWithMetaTraderNow,
+    testWebhookSignal,
   } = useTradingEngine();
 
   const { isInstallable, isInstalled, isIOS, installApp } = usePWAInstall();
 
   // Tab navigation: Clean & simple
-  const [activeTab, setActiveTab] = useState<'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL'>('BOT');
+  const [activeTab, setActiveTab] = useState<'BOT' | 'PYTHON' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL'>('BOT');
 
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -104,10 +107,23 @@ export default function App() {
             onMoveToBreakeven={moveToBreakevenManual}
             onOpenJournalDetail={(trade) => setSelectedJournalTrade(trade)}
             onNavigateToStrategy={() => setActiveTab('STRATEGY')}
+            onNavigateToPython={() => setActiveTab('PYTHON')}
             onUpdateBalance={(newBal) => updateAccountBalance(activeAccount.id, newBal)}
             onSyncMetaTraderNow={syncWithMetaTraderNow}
             isSyncingMT5={isSyncingMT5}
             mt5SyncInfo={mt5SyncInfo}
+            onResetToRealCleanMode={resetToRealCleanMode}
+          />
+        )}
+
+        {activeTab === 'PYTHON' && (
+          <PythonDirectTab
+            activeAccount={activeAccount}
+            mt5SyncInfo={mt5SyncInfo}
+            isSyncingMT5={isSyncingMT5}
+            onSyncMetaTraderNow={syncWithMetaTraderNow}
+            onUpdateBalance={updateAccountBalance}
+            onResetToRealCleanMode={resetToRealCleanMode}
           />
         )}
 
@@ -115,6 +131,7 @@ export default function App() {
           <UnattendedSetupTab
             activeAccount={activeAccount}
             onSendTestSignal={handleSendTestSignal}
+            onTriggerTestWebhook={testWebhookSignal}
           />
         )}
 
@@ -129,6 +146,7 @@ export default function App() {
             onSyncMetaTraderNow={syncWithMetaTraderNow}
             isSyncingMT5={isSyncingMT5}
             mt5SyncInfo={mt5SyncInfo}
+            onResetToRealCleanMode={resetToRealCleanMode}
           />
         )}
 

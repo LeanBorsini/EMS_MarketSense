@@ -17,27 +17,20 @@ export function loadStoredAccounts(): TradingAccount[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
     if (raw) {
       const parsed: TradingAccount[] = JSON.parse(raw);
-      // If user had the old 10k default for MT5 Demo or any demo account with 10k, upgrade it to 100k
-      const migrated = parsed.map(acc => {
-        if ((acc.id === 'acc-mt5-demo' || acc.name.includes('Demo')) && (acc.initialBalance <= 15000 || acc.currentBalance <= 15000)) {
-          return {
-            ...acc,
-            initialBalance: 100000,
-            currentBalance: 100000,
-            currentEquity: 100000,
-            startOfDayBalance: 100000,
-            floatingPnL: 0,
-            dailyRealizedPnL: 0,
-            riskRules: {
-              ...acc.riskRules,
-              maxRiskPerTradeUsd: (100000 * acc.riskRules.maxRiskPerTradePercent) / 100,
-              maxDailyLossUsd: (100000 * acc.riskRules.maxDailyLossPercent) / 100,
-            },
-          };
-        }
-        return acc;
-      });
-      return migrated;
+      // Remove stale mock accounts (like old FTMO 100k with fake 2200 pnl)
+      const sanitized = parsed
+        .filter(acc => acc.id !== 'acc-ftmo-100k' && acc.id !== 'acc-fundingpips-50k')
+        .map(acc => ({
+          ...acc,
+          currentEquity: acc.currentBalance,
+          dailyRealizedPnL: 0,
+          floatingPnL: 0,
+          startOfDayBalance: acc.currentBalance,
+        }));
+
+      if (sanitized.length > 0) {
+        return sanitized;
+      }
     }
   } catch (e) {
     console.warn('Error reading accounts from localStorage', e);
@@ -97,11 +90,26 @@ export function saveStoredStrategies(strategies: StrategyConfig[]) {
 export function loadStoredTrades(): TradeOrder[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TRADES);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: TradeOrder[] = JSON.parse(raw);
+      // Filter out stale mock trades (trd-101, trd-102)
+      return parsed.filter(t => t.id !== 'trd-101' && t.id !== 'trd-102');
+    }
   } catch (e) {
     console.warn('Error reading trades from localStorage', e);
   }
   return INITIAL_TRADES;
+}
+
+export function clearAllSimulationData(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.TRADES);
+    localStorage.removeItem(STORAGE_KEYS.LOGS);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(INITIAL_ACCOUNTS));
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_ACCOUNT, INITIAL_ACCOUNTS[0].id);
+  } catch (e) {
+    console.warn('Error clearing simulation data', e);
+  }
 }
 
 export function saveStoredTrades(trades: TradeOrder[]) {

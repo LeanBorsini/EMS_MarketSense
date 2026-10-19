@@ -20,8 +20,10 @@ import {
   loadDaemonRunning, 
   saveDaemonRunning,
   loadStoredLogs,
-  saveStoredLogs
+  saveStoredLogs,
+  clearAllSimulationData
 } from '../lib/storage';
+import { INITIAL_ACCOUNTS } from '../data/defaultAccounts';
 import { checkAutoBreakeven } from '../lib/riskCalculator';
 
 export function useTradingEngine() {
@@ -245,6 +247,44 @@ export function useTradingEngine() {
     return () => clearInterval(interval);
   }, [tickers, addLog]);
 
+  // Track webhook signals already processed in frontend
+  const processedSignalIdsRef = useRef<Set<string>>(new Set());
+
+  // Webhook Signal Poller (Polls /api/webhook/history every 2s)
+  useEffect(() => {
+    let isMounted = true;
+    const pollWebhookSignals = async () => {
+      try {
+        const res = await fetch('/api/webhook/history');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.signals || !Array.isArray(data.signals) || !isMounted) return;
+
+        // Check if there are new signals we haven't seen
+        for (const sig of data.signals) {
+          if (!processedSignalIdsRef.current.has(sig.id)) {
+            processedSignalIdsRef.current.add(sig.id);
+
+            // Log reception
+            addLog(
+              'SUCCESS',
+              `📡 [WEBHOOK RECIBIDO] ${sig.action} ${sig.contracts} en ${sig.symbol} (Cuenta #${sig.accountId}). Enrutado a MT5.`,
+              sig.symbol
+            );
+          }
+        }
+      } catch {
+        // Silent background polling
+      }
+    };
+
+    const interval = setInterval(pollWebhookSignals, 2000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [addLog]);
+
   // Live Auto-Sync with MetaTrader 5 Terminal / Gateway (Every 2.5s)
   useEffect(() => {
     let isSubscribed = true;
@@ -259,10 +299,18 @@ export function useTradingEngine() {
         const live: MT5LiveSyncInfo = json.data;
         setMt5SyncInfo(live);
 
+        // Only auto-synchronize if a real live bridge (Python or EA) is connected and has sent a valid balance
+        if (!live.connected || Number(live.balance) <= 0) return;
+
         // Auto-synchronize the active MT5 or demo account with MetaTrader's live balance
         setAccounts(prev => prev.map(acc => {
-          // If the account is MetaTrader, demo, or currently selected, ensure it matches MT5 live numbers
-          const isTargetAccount = acc.broker.includes('MetaTrader') || acc.id === 'acc-mt5-demo' || (acc.id === activeAccountId && acc.serverName.includes('ICMarkets'));
+          // If the account is MetaTrader, demo, currently selected, or matches the MT5 login
+          const isTargetAccount = 
+            acc.id === activeAccountId || 
+            acc.accountNumber === String(live.login) || 
+            acc.broker.includes('MetaTrader') || 
+            acc.id === 'acc-mt5-demo';
+            
           if (!isTargetAccount) return acc;
 
           const liveBalance = Number(live.balance);
@@ -320,7 +368,12 @@ export function useTradingEngine() {
           const targetEquity = Number(live.equity);
 
           setAccounts(prev => prev.map(acc => {
-            if (acc.id !== activeAccountId && acc.id !== 'acc-mt5-demo') return acc;
+            const isTarget = 
+              acc.id === activeAccountId || 
+              acc.accountNumber === String(live.login) || 
+              acc.id === 'acc-mt5-demo';
+              
+            if (!isTarget) return acc;
             const riskUsd = (targetBalance * acc.riskRules.maxRiskPerTradePercent) / 100;
             const dailyLossUsd = (targetBalance * acc.riskRules.maxDailyLossPercent) / 100;
             return {
@@ -346,6 +399,27 @@ export function useTradingEngine() {
       console.warn('Failed to force sync with MT5', e);
     } finally {
       setIsSyncingMT5(false);
+    }
+  };
+
+  // Test Webhook Signal Directly from UI
+  const testWebhookSignal = async (symbol = 'US500', action: 'BUY' | 'SELL' = 'BUY') => {
+    try {
+      const res = await fetch('/api/webhook/test-signal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          symbol, 
+          action, 
+          contracts: 0.5, 
+          account_id: activeAccount.accountNumber 
+        }),
+      });
+      if (res.ok) {
+        addLog('SUCCESS', `⚡ Señal de prueba enviada al Relay: ${action} en ${symbol}. Esperando recepción en MT5.`);
+      }
+    } catch (err) {
+      addLog('ERROR', 'Error enviando señal de prueba al Relay.');
     }
   };
 
@@ -550,7 +624,14 @@ export function useTradingEngine() {
         },
       };
     }));
-    addLog('SUCCESS', `Circuit Breaker restablecido manualmente para la cuenta. Operativa desbloqueada.`);
+  };
+
+  const resetToRealCleanMode = () => {
+    clearAllSimulationData();
+    setTrades([]);
+    setAccounts(INITIAL_ACCOUNTS);
+    setActiveAccountId(INITIAL_ACCOUNTS[0].id);
+    addLog('SUCCESS', '🧹 Modo Real Limpio activado. Se han eliminado todos los datos de simulación demo.');
   };
 
   return {
@@ -578,9 +659,11 @@ export function useTradingEngine() {
     toggleDaemon,
     emergencyPanicCloseAll,
     resetCircuitBreaker,
+    resetToRealCleanMode,
     addLog,
     mt5SyncInfo,
     isSyncingMT5,
     syncWithMetaTraderNow,
+    testWebhookSignal,
   };
 }

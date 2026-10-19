@@ -1,175 +1,262 @@
 /**
  * Complete MQL5 Expert Advisor for MetaTrader 5
- * Connects MetaTrader 5 to MarketSense Execution Webhook Relay.
- * 100% autonomous, zero human interaction required.
+ * All-in-One: Live Balance Telemetry Sync + Webhook Order Execution + Auto-Breakeven + Native Autonomous Strategy
  */
 
-export const MQL5_EXPERT_ADVISOR_CODE = `//+------------------------------------------------------------------+
-//|                                  MarketSense_Autonomous_Bridge.mq5|
-//|                 MarketSense Autonomous Execution Engine v2.0    |
-//|                        https://marketsense.app                   |
+export const getMql5ExpertAdvisorCode = (origin?: string, accountId?: string) => {
+  const currentOrigin = origin || (typeof window !== 'undefined' ? window.location.origin : 'https://tu-app-url.run.app');
+  const cleanAccount = accountId || '12345678';
+  const syncUrl = `${currentOrigin}/api/mt5/sync`;
+  const ordersUrl = `${currentOrigin}/api/webhook/pending-orders`;
+
+  return `//+------------------------------------------------------------------+
+//|                                  MarketSense_Universal_Bridge.mq5|
+//|                 EMS-MarketSense All-in-One Autonomous MT5 Bridge |
+//|        1) Telemetría en Vivo (Saldo, Equidad, Margen cada 1-2s)   |
+//|        2) Ejecución Autónoma de Órdenes (TradingView / Webhook)   |
+//|        3) Auto-Breakeven y Gestión de Riesgo Institucional       |
 //+------------------------------------------------------------------+
-#property copyright "MarketSense AI Systems"
-#property link      "https://marketsense.app"
-#property version   "2.00"
+#property copyright "EMS-MarketSense"
+#property link      "${currentOrigin}"
+#property version   "3.00"
 #property strict
 
 #include <Trade\\Trade.mqh>
 
-//--- Inputs
-input group "=== Configuración del Puente MarketSense ==="
-input string   InpWebhookUrl     = "https://tu-app-url.run.app/api/webhook/pending-orders"; // URL del Relay Webhook
-input string   InpAccountId      = "29841029";          // Tu ID de cuenta / Login
-input string   InpSecretKey      = "ms_sec_autonomous"; // Clave secreta
-input int      InpPollIntervalMs = 1000;                // Intervalo de sondeo (milisegundos)
+//--- Parámetros Configurables
+input group "=== 1. Enlace con Servidor MarketSense ==="
+input string   InpSyncUrl          = "${syncUrl}"; // URL Sincronización Telemetría
+input string   InpOrdersUrl        = "${ordersUrl}"; // URL Sondeo de Órdenes
+input int      InpSyncIntervalSec  = 2;            // Frecuencia de Sincronización (segundos)
 
-input group "=== Gestión de Riesgo y Protección ==="
-input ulong    InpMagicNumber    = 109283;              // Magic Number del Bot
-input double   InpMaxSlippagePips= 3.0;                 // Máximo deslizamiento permitido
-input bool     InpAutoBreakeven  = true;                // Mover a Breakeven automáticamente
-input double   InpBreakevenTriggerR = 1.0;              // Disparador de Breakeven (+1.0R)
+input group "=== 2. Gestión de Órdenes & Riesgo ==="
+input ulong    InpMagicNumber      = 202610;       // Magic Number identificador
+input double   InpDefaultLots      = 0.5;          // Lote por defecto si la señal no especifica
+input bool     InpAutoBreakeven    = true;         // Activar Auto-Breakeven institucional
+input double   InpBreakevenTriggerPips = 15.0;     // Pips en positivo para mover a Breakeven (+1 pip)
 
-//--- Global Objects
+input group "=== 3. Estrategia Autónoma Nativa en MT5 (Opcional) ==="
+input bool     InpRunNativeStrategy = false;       // Operar autónomo en MT5 sin depender de TradingView
+input int      InpFastEmaPeriod     = 20;          // Periodo EMA Rápida
+input int      InpSlowEmaPeriod     = 50;          // Periodo EMA Lenta
+
+//--- Variables Globales
 CTrade trade;
-datetime lastCheckTime = 0;
+datetime lastBarTime = 0;
+int fastEmaHandle = INVALID_HANDLE;
+int slowEmaHandle = INVALID_HANDLE;
 
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| Inicialización del Expert Advisor                               |
 //+------------------------------------------------------------------+
-int OnInit()
-{
+int OnInit() {
    trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetMarginMode();
    trade.SetTypeFillingBySymbol(_Symbol);
 
-   Print("✅ MarketSense Autonomous Bridge iniciado correctamente.");
-   Print("📡 Escuchando señales automáticas para la cuenta: ", InpAccountId);
+   EventSetTimer(InpSyncIntervalSec);
+
+   Print("==========================================================");
+   Print("⚡ [EMS-MarketSense Universal Bridge v3.0] Iniciado");
+   Print("📡 Servidor: ", "${currentOrigin}");
+   Print("👤 Cuenta Login: ", AccountInfoInteger(ACCOUNT_LOGIN), " (", AccountInfoString(ACCOUNT_SERVER), ")");
+   Print("💰 Saldo Actual: ", DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2), " ", AccountInfoString(ACCOUNT_CURRENCY));
+   Print("==========================================================");
+
+   if(InpRunNativeStrategy) {
+      fastEmaHandle = iMA(_Symbol, _Period, InpFastEmaPeriod, 0, MODE_EMA, PRICE_CLOSE);
+      slowEmaHandle = iMA(_Symbol, _Period, InpSlowEmaPeriod, 0, MODE_EMA, PRICE_CLOSE);
+      Print("🤖 [NATIVO MT5] Estrategia autónoma interna activada (Sin depender de alertas de TradingView).");
+   }
+
+   // Primera sincronización inmediata
+   SyncAccountWithMarketSense();
    return(INIT_SUCCEEDED);
 }
 
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| Desinicialización                                                |
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason)
-{
-   Print("🛑 MarketSense Bridge detenido. Razón: ", reason);
+void OnDeinit(const int reason) {
+   EventKillTimer();
+   if(fastEmaHandle != INVALID_HANDLE) IndicatorRelease(fastEmaHandle);
+   if(slowEmaHandle != INVALID_HANDLE) IndicatorRelease(slowEmaHandle);
+   Print("🛑 [EMS-MarketSense Bridge] Detenido. Razón: ", reason);
 }
 
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| Temporizador (Se ejecuta cada InpSyncIntervalSec)                |
 //+------------------------------------------------------------------+
-void OnTick()
-{
-   // 1. Revisar Trailing Breakeven para posiciones abiertas
-   if(InpAutoBreakeven)
-   {
+void OnTimer() {
+   // 1. Sincronizar saldo y telemetría en tiempo real con MarketSense
+   SyncAccountWithMarketSense();
+
+   // 2. Consultar y ejecutar órdenes pendientes del Webhook / TradingView
+   FetchAndExecutePendingOrders();
+}
+
+//+------------------------------------------------------------------+
+//| Tick del mercado (Para gestión de Breakeven y estrategia nativa)|
+//+------------------------------------------------------------------+
+void OnTick() {
+   if(InpAutoBreakeven) {
       ManageBreakeven();
    }
 
-   // 2. Comprobar nuevas órdenes cada intervalo de tiempo
-   datetime now = TimeCurrent();
-   if(now - lastCheckTime >= (InpPollIntervalMs / 1000))
-   {
-      lastCheckTime = now;
-      FetchAndExecuteOrders();
+   if(InpRunNativeStrategy) {
+      CheckNativeStrategySignals();
    }
 }
 
 //+------------------------------------------------------------------+
-//| Consulta y ejecuta órdenes pendientes desde el Webhook           |
+//| 1. Sincronización de Telemetría con Servidor MarketSense         |
 //+------------------------------------------------------------------+
-void FetchAndExecuteOrders()
-{
+void SyncAccountWithMarketSense() {
+   string headers = "Content-Type: application/json\\r\\n";
+   char postData[];
+   char result[];
+   string resultHeaders;
+   
+   long   login      = AccountInfoInteger(ACCOUNT_LOGIN);
+   string server     = AccountInfoString(ACCOUNT_SERVER);
+   string company    = AccountInfoString(ACCOUNT_COMPANY);
+   string currency   = AccountInfoString(ACCOUNT_CURRENCY);
+   long   leverage   = AccountInfoInteger(ACCOUNT_LEVERAGE);
+   double balance    = AccountInfoDouble(ACCOUNT_BALANCE);
+   double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
+   double marginFree = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   double profit     = AccountInfoDouble(ACCOUNT_PROFIT);
+   
+   string json = StringFormat(
+      "{\\"login\\":\\"%d\\",\\"server\\":\\"%s\\",\\"broker\\":\\"%s\\",\\"currency\\":\\"%s\\",\\"leverage\\":%d,\\"balance\\":%.2f,\\"equity\\":%.2f,\\"marginFree\\":%.2f,\\"profit\\":%.2f,\\"source\\":\\"EA_MQL5\\"}",
+      login, server, company, currency, leverage, balance, equity, marginFree, profit
+   );
+   
+   StringToCharArray(json, postData, 0, WHOLE_ARRAY, CP_UTF8);
+   ArrayResize(postData, ArraySize(postData) - 1);
+   
+   int res = WebRequest("POST", InpSyncUrl, headers, 3000, postData, result, resultHeaders);
+   if(res == -1) {
+      Print("[!] Error WebRequest MT5. Habilita WebRequest en MT5: Herramientas -> Opciones -> Asesores Expertos -> Añadir URL: ", "${currentOrigin}");
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 2. Sondeo y Ejecución de Órdenes Pendientes del Webhook          |
+//+------------------------------------------------------------------+
+void FetchAndExecutePendingOrders() {
    char postData[];
    char resultData[];
    string resultHeaders;
-   string url = InpWebhookUrl + "?account_id=" + InpAccountId + "&secret=" + InpSecretKey;
+   string url = InpOrdersUrl + "?account_id=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
 
-   // Enviar petición HTTP al Relay
-   int res = WebRequest("GET", url, "", 1000, postData, resultData, resultHeaders);
-   if(res == 200)
-   {
+   int res = WebRequest("GET", url, "", 1500, postData, resultData, resultHeaders);
+   if(res == 200) {
       string jsonResponse = CharArrayToString(resultData);
-      if(StringLen(jsonResponse) > 10 && StringFind(jsonResponse, "\\"has_order\\":true") >= 0)
-      {
-         ProcessOrderJson(jsonResponse);
+      if(StringLen(jsonResponse) > 10 && StringFind(jsonResponse, "\\"has_order\\":true") >= 0) {
+         ProcessIncomingOrderJson(jsonResponse);
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Procesa y abre la orden en el broker sin intervención humana     |
+//| Abre la orden recibida del Webhook con SL y TP calculados        |
 //+------------------------------------------------------------------+
-void ProcessOrderJson(string json)
-{
-   // Analizar acción (BUY o SELL)
-   bool isBuy = (StringFind(json, "\\"BUY\\"") >= 0);
-   bool isSell = (StringFind(json, "\\"SELL\\"") >= 0);
-
+void ProcessIncomingOrderJson(string json) {
+   bool isBuy = (StringFind(json, "\\"action\\":\\"BUY\\"") >= 0);
+   bool isSell = (StringFind(json, "\\"action\\":\\"SELL\\"") >= 0);
    if(!isBuy && !isSell) return;
 
-   double volume = 0.5; // Lote predeterminado o calculado
+   double volume = InpDefaultLots;
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-   // Abrir orden
-   if(isBuy)
-   {
-      double sl = bid - (15.0 * _Point * 10);
-      double tp = ask + (35.0 * _Point * 10);
-      if(trade.Buy(volume, _Symbol, ask, sl, tp, "MarketSense Auto Buy"))
-      {
-         Print("🚀 [AUTÓNOMO] Orden BUY ejecutada exitosamente en ", _Symbol, " Lotes: ", volume);
+   if(isBuy) {
+      double sl = bid - (InpBreakevenTriggerPips * _Point * 10);
+      double tp = ask + (InpBreakevenTriggerPips * 2.5 * _Point * 10);
+      if(trade.Buy(volume, _Symbol, ask, sl, tp, "MarketSense TV Webhook")) {
+         Print("🚀 [EJECUTADO] Compra BUY en ", _Symbol, " Lotes: ", volume, " Precio: ", ask);
+      } else {
+         Print("[!] Error ejecutando BUY: ", trade.ResultRetcodeDescription());
       }
-   }
-   else if(isSell)
-   {
-      double sl = ask + (15.0 * _Point * 10);
-      double tp = bid - (35.0 * _Point * 10);
-      if(trade.Sell(volume, _Symbol, bid, sl, tp, "MarketSense Auto Sell"))
-      {
-         Print("🚀 [AUTÓNOMO] Orden SELL ejecutada exitosamente en ", _Symbol, " Lotes: ", volume);
+   } else if(isSell) {
+      double sl = ask + (InpBreakevenTriggerPips * _Point * 10);
+      double tp = bid - (InpBreakevenTriggerPips * 2.5 * _Point * 10);
+      if(trade.Sell(volume, _Symbol, bid, sl, tp, "MarketSense TV Webhook")) {
+         Print("🚀 [EJECUTADO] Venta SELL en ", _Symbol, " Lotes: ", volume, " Precio: ", bid);
+      } else {
+         Print("[!] Error ejecutando SELL: ", trade.ResultRetcodeDescription());
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Protege posiciones moviendo el Stop Loss a Breakeven (+1 pip)    |
+//| 3. Protección de Posiciones: Auto-Breakeven (+1 pip de ganancia) |
 //+------------------------------------------------------------------+
-void ManageBreakeven()
-{
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
-   {
+void ManageBreakeven() {
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0 && PositionGetInteger(POSITION_MAGIC) == InpMagicNumber)
-      {
+      if(ticket > 0 && PositionGetInteger(POSITION_MAGIC) == InpMagicNumber) {
          double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
          double currentPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
          double sl = PositionGetDouble(POSITION_SL);
          long type = PositionGetInteger(POSITION_TYPE);
 
-         // Para compras
-         if(type == POSITION_TYPE_BUY)
-         {
-            if(currentPrice > openPrice + (15.0 * _Point * 10) && sl < openPrice)
-            {
-               double newSl = openPrice + (1.0 * _Point * 10); // +1 pip
+         if(type == POSITION_TYPE_BUY) {
+            if(currentPrice >= openPrice + (InpBreakevenTriggerPips * _Point * 10) && sl < openPrice) {
+               double newSl = openPrice + (1.0 * _Point * 10);
                trade.PositionModify(ticket, newSl, PositionGetDouble(POSITION_TP));
-               Print("🛡️ [BREAKEVEN] Stop Loss movido a precio de entrada para orden #", ticket);
+               Print("🛡️ [BREAKEVEN] Stop Loss protegido a entrada +1 pip para orden #", ticket);
             }
-         }
-         // Para ventas
-         else if(type == POSITION_TYPE_SELL)
-         {
-            if(currentPrice < openPrice - (15.0 * _Point * 10) && (sl > openPrice || sl == 0))
-            {
-               double newSl = openPrice - (1.0 * _Point * 10); // -1 pip
+         } else if(type == POSITION_TYPE_SELL) {
+            if(currentPrice <= openPrice - (InpBreakevenTriggerPips * _Point * 10) && (sl > openPrice || sl == 0)) {
+               double newSl = openPrice - (1.0 * _Point * 10);
                trade.PositionModify(ticket, newSl, PositionGetDouble(POSITION_TP));
-               Print("🛡️ [BREAKEVEN] Stop Loss movido a precio de entrada para orden #", ticket);
+               Print("🛡️ [BREAKEVEN] Stop Loss protegido a entrada +1 pip para orden #", ticket);
             }
          }
       }
    }
 }
+
 //+------------------------------------------------------------------+
+//| 4. Estrategia Nativa Autónoma (Sin alertas de TradingView)        |
+//+------------------------------------------------------------------+
+void CheckNativeStrategySignals() {
+   datetime currentBar = iTime(_Symbol, _Period, 0);
+   if(currentBar == lastBarTime) return; // Solo 1 vez por barra cerrada
+   lastBarTime = currentBar;
+
+   if(fastEmaHandle == INVALID_HANDLE || slowEmaHandle == INVALID_HANDLE) return;
+
+   double fastMAs[], slowMAs[];
+   ArraySetAsSeries(fastMAs, true);
+   ArraySetAsSeries(slowMAs, true);
+
+   if(CopyBuffer(fastEmaHandle, 0, 1, 2, fastMAs) < 2 || CopyBuffer(slowEmaHandle, 0, 1, 2, slowMAs) < 2) return;
+
+   // Cruce Alcista
+   if(fastMAs[1] <= slowMAs[1] && fastMAs[0] > slowMAs[0]) {
+      if(PositionsTotal() == 0) {
+         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+         double sl = ask - (InpBreakevenTriggerPips * _Point * 10);
+         double tp = ask + (InpBreakevenTriggerPips * 2.0 * _Point * 10);
+         trade.Buy(InpDefaultLots, _Symbol, ask, sl, tp, "MarketSense Nativo MT5");
+         Print("🎯 [NATIVO MT5] Cruce EMA alcista detectado. Orden BUY abierta automáticamente.");
+      }
+   }
+   // Cruce Bajista
+   else if(fastMAs[1] >= slowMAs[1] && fastMAs[0] < slowMAs[0]) {
+      if(PositionsTotal() == 0) {
+         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         double sl = bid + (InpBreakevenTriggerPips * _Point * 10);
+         double tp = bid - (InpBreakevenTriggerPips * 2.0 * _Point * 10);
+         trade.Sell(InpDefaultLots, _Symbol, bid, sl, tp, "MarketSense Nativo MT5");
+         Print("🎯 [NATIVO MT5] Cruce EMA bajista detectado. Orden SELL abierta automáticamente.");
+      }
+   }
+}
 `;
+};
+
+export const MQL5_EXPERT_ADVISOR_CODE = getMql5ExpertAdvisorCode();

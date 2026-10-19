@@ -14,8 +14,8 @@ import { TradingAccount } from '../types/execution';
 interface HeaderProps {
   activeAccount: TradingAccount;
   isDaemonRunning: boolean;
-  activeTab: 'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL';
-  setActiveTab: (tab: 'BOT' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL') => void;
+  activeTab: 'BOT' | 'PYTHON' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL';
+  setActiveTab: (tab: 'BOT' | 'PYTHON' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL') => void;
   onOpenSettings: () => void;
   onOpenPwa: () => void;
   onOpenSync: () => void;
@@ -112,6 +112,18 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               🤖 Mi Bot
+            </button>
+
+            <button
+              onClick={() => setActiveTab('PYTHON')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'PYTHON'
+                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
+                  : 'text-[#2E4A35] font-bold hover:text-[#191C21] hover:bg-[#EBF2EC]'
+              }`}
+            >
+              <span>🐍</span>
+              <span>Python Directo</span>
             </button>
 
             <button

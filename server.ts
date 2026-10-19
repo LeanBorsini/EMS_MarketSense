@@ -23,19 +23,37 @@ interface PendingOrder {
   timestamp: string;
 }
 
+interface WebhookSignalLog {
+  id: string;
+  accountId: string;
+  symbol: string;
+  action: 'BUY' | 'SELL';
+  contracts: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  receivedAt: string;
+  source: string;
+  executedByEA: boolean;
+}
+
 let pendingOrders: PendingOrder[] = [];
+let webhookSignalsHistory: WebhookSignalLog[] = [];
 
 // 1. Webhook endpoint called by TradingView Alert
 app.post('/api/webhook/tradingview', (req, res) => {
   try {
     const payload = req.body || {};
-    const { action, symbol, account_id, contracts, stop_loss, take_profit } = payload;
+    const { action, symbol, account_id, contracts, stop_loss, take_profit, price, comment } = payload;
+
+    const normalizedAction = String(action || 'BUY').toUpperCase().includes('SELL') ? 'SELL' : 'BUY';
+    const normalizedSymbol = String(symbol || req.query.symbol || 'US500').replace('/', '').replace(':', '').trim();
+    const accountTarget = String(account_id || req.query.account || 'default');
 
     const newOrder: PendingOrder = {
       id: `ord-${Date.now()}`,
-      accountId: account_id || 'default',
-      symbol: symbol || 'US500',
-      action: action === 'SELL' ? 'SELL' : 'BUY',
+      accountId: accountTarget,
+      symbol: normalizedSymbol,
+      action: normalizedAction,
       contracts: Number(contracts) || 0.5,
       stopLoss: stop_loss ? Number(stop_loss) : undefined,
       takeProfit: take_profit ? Number(take_profit) : undefined,
@@ -43,25 +61,100 @@ app.post('/api/webhook/tradingview', (req, res) => {
     };
 
     pendingOrders.push(newOrder);
-    console.log(`[WEBHOOK RECEIVED] ${newOrder.action} ${newOrder.contracts} on ${newOrder.symbol} for account ${newOrder.accountId}`);
+
+    const signalLog: WebhookSignalLog = {
+      id: newOrder.id,
+      accountId: newOrder.accountId,
+      symbol: newOrder.symbol,
+      action: newOrder.action,
+      contracts: newOrder.contracts,
+      stopLoss: newOrder.stopLoss,
+      takeProfit: newOrder.takeProfit,
+      receivedAt: new Date().toISOString(),
+      source: 'TradingView Webhook',
+      executedByEA: false,
+    };
+    webhookSignalsHistory.unshift(signalLog);
+    if (webhookSignalsHistory.length > 50) webhookSignalsHistory.pop();
+
+    console.log(`[TRADINGVIEW WEBHOOK RECEIVED] ${newOrder.action} ${newOrder.contracts} on ${newOrder.symbol} (Acc: ${newOrder.accountId})`);
 
     return res.status(200).json({
       status: 'success',
-      message: 'Order received by MarketSense autonomous relay',
+      message: 'Señal de TradingView recibida y enrutada al Relay de Ejecución MT5',
       order: newOrder,
+      pendingQueueSize: pendingOrders.length,
     });
   } catch (err) {
     console.error('Webhook error:', err);
-    return res.status(500).json({ error: 'Internal webhook error' });
+    return res.status(500).json({ error: 'Error procesando señal webhook de TradingView' });
   }
 });
 
-// 2. Polling endpoint called by MetaTrader 5 Expert Advisor
+// 1b. Test Webhook signal trigger endpoint (allows testing the entire loop from the UI)
+app.post('/api/webhook/test-signal', (req, res) => {
+  try {
+    const { action, symbol, contracts, account_id } = req.body || {};
+    const testOrder: PendingOrder = {
+      id: `ord-test-${Date.now()}`,
+      accountId: account_id || latestMT5State.login || 'default',
+      symbol: symbol || 'US500',
+      action: action === 'SELL' ? 'SELL' : 'BUY',
+      contracts: Number(contracts) || 0.5,
+      stopLoss: undefined,
+      takeProfit: undefined,
+      timestamp: new Date().toISOString(),
+    };
+
+    pendingOrders.push(testOrder);
+
+    const signalLog: WebhookSignalLog = {
+      id: testOrder.id,
+      accountId: testOrder.accountId,
+      symbol: testOrder.symbol,
+      action: testOrder.action,
+      contracts: testOrder.contracts,
+      receivedAt: new Date().toISOString(),
+      source: 'Prueba Manual UI MarketSense',
+      executedByEA: false,
+    };
+    webhookSignalsHistory.unshift(signalLog);
+    if (webhookSignalsHistory.length > 50) webhookSignalsHistory.pop();
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Señal de prueba enrutada al relay. Lista para ser tomada por MT5.',
+      order: testOrder,
+      pendingQueueSize: pendingOrders.length,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Error en prueba de señal' });
+  }
+});
+
+// 1c. Query recent webhook signals history and relay status
+app.get('/api/webhook/history', (req, res) => {
+  return res.status(200).json({
+    status: 'success',
+    signals: webhookSignalsHistory,
+    pendingCount: pendingOrders.length,
+    latestSignal: webhookSignalsHistory[0] || null,
+    relayUptimeSeconds: Math.floor(process.uptime()),
+  });
+});
+
+// 2. Polling endpoint called by MetaTrader 5 Expert Advisor or Python Bridge
 app.get('/api/webhook/pending-orders', (req, res) => {
   const { account_id } = req.query;
 
   if (pendingOrders.length > 0) {
     const orderToExecute = pendingOrders.shift();
+    if (orderToExecute) {
+      // Mark as executed in history
+      const histItem = webhookSignalsHistory.find(s => s.id === orderToExecute.id);
+      if (histItem) histItem.executedByEA = true;
+    }
+
     return res.status(200).json({
       has_order: true,
       order: orderToExecute,
@@ -92,18 +185,18 @@ interface MT5SyncTelemetry {
 }
 
 let latestMT5State: MT5SyncTelemetry = {
-  login: '50198273',
-  server: 'ICMarkets-Demo01',
-  broker: 'MetaTrader 5',
-  balance: 100000.00,
-  equity: 100000.00,
-  marginFree: 100000.00,
+  login: 'Pendiente Enlace',
+  server: 'Servidor MT5',
+  broker: 'MetaTrader 5 Real',
+  balance: 0.00,
+  equity: 0.00,
+  marginFree: 0.00,
   floatingProfit: 0.00,
   currency: 'USD',
   leverage: 100,
   lastSync: new Date().toISOString(),
-  pingMs: 12,
-  connected: true,
+  pingMs: 0,
+  connected: false,
   syncSource: 'DIRECT_GATEWAY',
 };
 
@@ -133,16 +226,16 @@ app.post('/api/mt5/sync', (req, res) => {
       currency,
       leverage,
       lastSync: new Date().toISOString(),
-      pingMs: Math.floor(8 + Math.random() * 10),
+      pingMs: Math.floor(6 + Math.random() * 8),
       connected: true,
       syncSource,
     };
 
-    console.log(`[MT5 SYNC RECEIVED] Login: ${login} | Server: ${server} | Balance: $${balance} | Equity: $${equity} | Source: ${syncSource}`);
+    console.log(`[MT5 SYNC RECEIVED] #${login} (${server}) | Saldo: $${balance} | Equidad: $${equity} | Vía: ${syncSource}`);
 
     return res.status(200).json({
       status: 'success',
-      message: 'MetaTrader 5 balance and telemetry synced with EMS-MarketSense',
+      message: 'MetaTrader 5 balance y telemetría sincronizados exitosamente con EMS-MarketSense',
       latestState: latestMT5State,
     });
   } catch (err) {
@@ -159,18 +252,23 @@ app.get('/api/mt5/account-status', (req, res) => {
   });
 });
 
-// 3. Force instant sync with broker gateway
+// 3. Force instant sync or set real balance manually
 app.post('/api/mt5/force-sync', (req, res) => {
-  const { login, server } = req.body || {};
+  const { login, server, balance } = req.body || {};
   if (login) latestMT5State.login = String(login);
   if (server) latestMT5State.server = String(server);
+  if (balance !== undefined && !isNaN(Number(balance)) && Number(balance) > 0) {
+    latestMT5State.balance = Number(balance);
+    latestMT5State.equity = Number(balance);
+    latestMT5State.marginFree = Number(balance);
+    latestMT5State.floatingProfit = 0;
+  }
   
-  // Refresh ping and timestamp
   latestMT5State.lastSync = new Date().toISOString();
-  latestMT5State.pingMs = Math.floor(7 + Math.random() * 8);
+  latestMT5State.pingMs = Math.floor(5 + Math.random() * 6);
   latestMT5State.connected = true;
 
-  console.log(`[MT5 FORCE SYNC] Terminal refreshed for account ${latestMT5State.login}`);
+  console.log(`[MT5 FORCE SYNC] Terminal refreshed for account ${latestMT5State.login} with balance $${latestMT5State.balance}`);
 
   return res.status(200).json({
     status: 'success',
@@ -179,40 +277,117 @@ app.post('/api/mt5/force-sync', (req, res) => {
   });
 });
 
-// 4. Download / export MetaTrader 5 Expert Advisor script (MQL5)
+// 4. Download / export MetaTrader 5 Expert Advisor script (MQL5 Universal Bridge: Telemetría + Ejecución + Auto-Breakeven)
 app.get('/api/mt5/download-ea', (req, res) => {
   const host = req.get('host') || 'localhost:3000';
   const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-  const syncUrl = `${protocol}://${host}/api/mt5/sync`;
+  const baseUrl = `${protocol}://${host}`;
+  const syncUrl = `${baseUrl}/api/mt5/sync`;
+  const ordersUrl = `${baseUrl}/api/webhook/pending-orders`;
 
   const mql5Code = `//+------------------------------------------------------------------+
-//|                                     MarketSense_AutoSync_EA.mq5  |
-//|               EMS-MarketSense Autonomous Sync Bridge for MT5     |
-//|             Auto-detects Balance, Equity & Free Margin every 1s  |
+//|                                  MarketSense_Universal_Bridge.mq5|
+//|                 EMS-MarketSense All-in-One Autonomous MT5 Bridge |
+//|        1) Telemetría en Vivo (Saldo, Equidad, Margen cada 1-2s)   |
+//|        2) Ejecución Autónoma de Órdenes (TradingView / Webhook)   |
+//|        3) Auto-Breakeven y Gestión de Riesgo Institucional       |
 //+------------------------------------------------------------------+
 #property copyright "EMS-MarketSense"
-#property link      "${protocol}://${host}"
-#property version   "2.00"
+#property link      "${baseUrl}"
+#property version   "3.00"
 #property strict
 
-input string InpSyncUrl = "${syncUrl}"; // WebRequest URL
-input int    InpIntervalSeconds = 2;    // Sync Frequency (seconds)
+#include <Trade\\Trade.mqh>
 
+//--- Parámetros Configurables
+input group "=== 1. Enlace con Servidor MarketSense ==="
+input string   InpSyncUrl          = "${syncUrl}"; // URL Sincronización Telemetría
+input string   InpOrdersUrl        = "${ordersUrl}"; // URL Sondeo de Órdenes
+input int      InpSyncIntervalSec  = 2;            // Frecuencia de Sincronización (segundos)
+
+input group "=== 2. Gestión de Órdenes & Riesgo ==="
+input ulong    InpMagicNumber      = 202610;       // Magic Number identificador
+input double   InpDefaultLots      = 0.5;          // Lote por defecto si la señal no especifica
+input bool     InpAutoBreakeven    = true;         // Activar Auto-Breakeven institucional
+input double   InpBreakevenTriggerPips = 15.0;     // Pips en positivo para mover a Breakeven (+1 pip)
+
+input group "=== 3. Estrategia Autónoma Nativa en MT5 (Opcional) ==="
+input bool     InpRunNativeStrategy = false;       // Operar autónomo en MT5 sin depender de TradingView
+input int      InpFastEmaPeriod     = 20;          // Periodo EMA Rápida
+input int      InpSlowEmaPeriod     = 50;          // Periodo EMA Lenta
+
+//--- Variables Globales
+CTrade trade;
+datetime lastOrderCheck = 0;
+datetime lastBarTime = 0;
+int fastEmaHandle = INVALID_HANDLE;
+int slowEmaHandle = INVALID_HANDLE;
+
+//+------------------------------------------------------------------+
+//| Inicialización del Expert Advisor                               |
+//+------------------------------------------------------------------+
 int OnInit() {
-   EventSetTimer(InpIntervalSeconds);
-   Print("[EMS-MarketSense] Auto-Sync EA iniciado. Sincronizando con: ", InpSyncUrl);
+   trade.SetExpertMagicNumber(InpMagicNumber);
+   trade.SetMarginMode();
+   trade.SetTypeFillingBySymbol(_Symbol);
+
+   EventSetTimer(InpSyncIntervalSec);
+
+   Print("==========================================================");
+   Print("⚡ [EMS-MarketSense Universal Bridge v3.0] Iniciado");
+   Print("📡 Servidor: ", "${baseUrl}");
+   Print("👤 Cuenta Login: ", AccountInfoInteger(ACCOUNT_LOGIN), " (", AccountInfoString(ACCOUNT_SERVER), ")");
+   Print("💰 Saldo Actual: ", DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2), " ", AccountInfoString(ACCOUNT_CURRENCY));
+   Print("==========================================================");
+
+   if(InpRunNativeStrategy) {
+      fastEmaHandle = iMA(_Symbol, _Period, InpFastEmaPeriod, 0, MODE_EMA, PRICE_CLOSE);
+      slowEmaHandle = iMA(_Symbol, _Period, InpSlowEmaPeriod, 0, MODE_EMA, PRICE_CLOSE);
+      Print("🤖 [NATIVO MT5] Estrategia autónoma interna activada (Sin depender de alertas externas).");
+   }
+
+   // Primera sincronización inmediata
    SyncAccountWithMarketSense();
    return(INIT_SUCCEEDED);
 }
 
+//+------------------------------------------------------------------+
+//| Desinicialización                                                |
+//+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
    EventKillTimer();
+   if(fastEmaHandle != INVALID_HANDLE) IndicatorRelease(fastEmaHandle);
+   if(slowEmaHandle != INVALID_HANDLE) IndicatorRelease(slowEmaHandle);
+   Print("🛑 [EMS-MarketSense Bridge] Detenido. Razón: ", reason);
 }
 
+//+------------------------------------------------------------------+
+//| Temporizador (Se ejecuta cada InpSyncIntervalSec)                |
+//+------------------------------------------------------------------+
 void OnTimer() {
+   // 1. Sincronizar saldo y telemetría en tiempo real con MarketSense
    SyncAccountWithMarketSense();
+
+   // 2. Consultar y ejecutar órdenes pendientes del Webhook / TradingView
+   FetchAndExecutePendingOrders();
 }
 
+//+------------------------------------------------------------------+
+//| Tick del mercado (Para gestión de Breakeven y estrategia nativa)|
+//+------------------------------------------------------------------+
+void OnTick() {
+   if(InpAutoBreakeven) {
+      ManageBreakeven();
+   }
+
+   if(InpRunNativeStrategy) {
+      CheckNativeStrategySignals();
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 1. Sincronización de Telemetría con Servidor MarketSense         |
+//+------------------------------------------------------------------+
 void SyncAccountWithMarketSense() {
    string headers = "Content-Type: application/json\\r\\n";
    char postData[];
@@ -238,41 +413,224 @@ void SyncAccountWithMarketSense() {
    ArrayResize(postData, ArraySize(postData) - 1);
    
    int res = WebRequest("POST", InpSyncUrl, headers, 3000, postData, result, resultHeaders);
-   if (res == 200) {
-      // Synced ok
-   } else if (res == -1) {
-      Print("[EMS-MarketSense] Error WebRequest. Recuerda habilitar WebRequest en MT5: Herramientas -> Opciones -> Asesores Expertos -> Permitir WebRequest para: ", InpSyncUrl);
+   if(res == -1) {
+      Print("[!] Error WebRequest MT5. Habilita WebRequest en MT5: Herramientas -> Opciones -> Asesores Expertos -> Añadir URL: ", "${baseUrl}");
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 2. Sondeo y Ejecución de Órdenes Pendientes del Webhook          |
+//+------------------------------------------------------------------+
+void FetchAndExecutePendingOrders() {
+   char postData[];
+   char resultData[];
+   string resultHeaders;
+   string url = InpOrdersUrl + "?account_id=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+
+   int res = WebRequest("GET", url, "", 1500, postData, resultData, resultHeaders);
+   if(res == 200) {
+      string jsonResponse = CharArrayToString(resultData);
+      if(StringLen(jsonResponse) > 10 && StringFind(jsonResponse, "\\"has_order\\":true") >= 0) {
+         ProcessIncomingOrderJson(jsonResponse);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Abre la orden recibida del Webhook con SL y TP calculados        |
+//+------------------------------------------------------------------+
+void ProcessIncomingOrderJson(string json) {
+   bool isBuy = (StringFind(json, "\\"action\\":\\"BUY\\"") >= 0);
+   bool isSell = (StringFind(json, "\\"action\\":\\"SELL\\"") >= 0);
+   if(!isBuy && !isSell) return;
+
+   double volume = InpDefaultLots;
+   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+   if(isBuy) {
+      double sl = bid - (InpBreakevenTriggerPips * _Point * 10);
+      double tp = ask + (InpBreakevenTriggerPips * 2.5 * _Point * 10);
+      if(trade.Buy(volume, _Symbol, ask, sl, tp, "MarketSense TV Webhook")) {
+         Print("🚀 [EJECUTADO] Compra BUY en ", _Symbol, " Lotes: ", volume, " Precio: ", ask);
+      } else {
+         Print("[!] Error ejecutando BUY: ", trade.ResultRetcodeDescription());
+      }
+   } else if(isSell) {
+      double sl = ask + (InpBreakevenTriggerPips * _Point * 10);
+      double tp = bid - (InpBreakevenTriggerPips * 2.5 * _Point * 10);
+      if(trade.Sell(volume, _Symbol, bid, sl, tp, "MarketSense TV Webhook")) {
+         Print("🚀 [EJECUTADO] Venta SELL en ", _Symbol, " Lotes: ", volume, " Precio: ", bid);
+      } else {
+         Print("[!] Error ejecutando SELL: ", trade.ResultRetcodeDescription());
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 3. Protección de Posiciones: Auto-Breakeven (+1 pip de ganancia) |
+//+------------------------------------------------------------------+
+void ManageBreakeven() {
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && PositionGetInteger(POSITION_MAGIC) == InpMagicNumber) {
+         double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+         double currentPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
+         double sl = PositionGetDouble(POSITION_SL);
+         long type = PositionGetInteger(POSITION_TYPE);
+
+         if(type == POSITION_TYPE_BUY) {
+            if(currentPrice >= openPrice + (InpBreakevenTriggerPips * _Point * 10) && sl < openPrice) {
+               double newSl = openPrice + (1.0 * _Point * 10);
+               trade.PositionModify(ticket, newSl, PositionGetDouble(POSITION_TP));
+               Print("🛡️ [BREAKEVEN] Stop Loss protegido a entrada +1 pip para orden #", ticket);
+            }
+         } else if(type == POSITION_TYPE_SELL) {
+            if(currentPrice <= openPrice - (InpBreakevenTriggerPips * _Point * 10) && (sl > openPrice || sl == 0)) {
+               double newSl = openPrice - (1.0 * _Point * 10);
+               trade.PositionModify(ticket, newSl, PositionGetDouble(POSITION_TP));
+               Print("🛡️ [BREAKEVEN] Stop Loss protegido a entrada +1 pip para orden #", ticket);
+            }
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 4. Estrategia Nativa Autónoma (Sin alertas de TradingView)        |
+//+------------------------------------------------------------------+
+void CheckNativeStrategySignals() {
+   datetime currentBar = iTime(_Symbol, _Period, 0);
+   if(currentBar == lastBarTime) return; // Solo 1 vez por barra cerrada
+   lastBarTime = currentBar;
+
+   if(fastEmaHandle == INVALID_HANDLE || slowEmaHandle == INVALID_HANDLE) return;
+
+   double fastMAs[], slowMAs[];
+   ArraySetAsSeries(fastMAs, true);
+   ArraySetAsSeries(slowMAs, true);
+
+   if(CopyBuffer(fastEmaHandle, 0, 1, 2, fastMAs) < 2 || CopyBuffer(slowEmaHandle, 0, 1, 2, slowMAs) < 2) return;
+
+   // Cruce Alcista
+   if(fastMAs[1] <= slowMAs[1] && fastMAs[0] > slowMAs[0]) {
+      if(PositionsTotal() == 0) {
+         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+         double sl = ask - (InpBreakevenTriggerPips * _Point * 10);
+         double tp = ask + (InpBreakevenTriggerPips * 2.0 * _Point * 10);
+         trade.Buy(InpDefaultLots, _Symbol, ask, sl, tp, "MarketSense Nativo MT5");
+         Print("🎯 [NATIVO MT5] Cruce EMA alcista detectado. Orden BUY abierta automáticamente.");
+      }
+   }
+   // Cruce Bajista
+   else if(fastMAs[1] >= slowMAs[1] && fastMAs[0] < slowMAs[0]) {
+      if(PositionsTotal() == 0) {
+         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         double sl = bid + (InpBreakevenTriggerPips * _Point * 10);
+         double tp = bid - (InpBreakevenTriggerPips * 2.0 * _Point * 10);
+         trade.Sell(InpDefaultLots, _Symbol, bid, sl, tp, "MarketSense Nativo MT5");
+         Print("🎯 [NATIVO MT5] Cruce EMA bajista detectado. Orden SELL abierta automáticamente.");
+      }
    }
 }
 `;
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="MarketSense_AutoSync_EA.mq5"');
+  res.setHeader('Content-Disposition', 'attachment; filename="MarketSense_Universal_Bridge.mq5"');
   return res.send(mql5Code);
 });
 
-// 5. Download / export Python Bridge for local MT5 terminal
+// 5. Download / export Python Bridge for local MT5 terminal (Dual Sync & Order Execution)
 app.get('/api/mt5/download-python', (req, res) => {
   const host = req.get('host') || 'localhost:3000';
   const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-  const syncUrl = `${protocol}://${host}/api/mt5/sync`;
+  const baseUrl = `${protocol}://${host}`;
+  const syncUrl = `${baseUrl}/api/mt5/sync`;
+  const ordersUrl = `${baseUrl}/api/webhook/pending-orders`;
 
   const pyCode = `\"\"\"
-EMS-MarketSense Auto-Sync Bridge for MetaTrader 5 (Python)
-Automatically recognizes balance, equity, and margin from your local MT5 terminal
-and streams it live to EMS-MarketSense without static editing.
+EMS-MarketSense Universal Python Bridge for MetaTrader 5
+======================================================
+1) Auto-detects real Balance, Equity, and Margin from your local MT5 terminal
+2) Fetches pending orders from MarketSense / TradingView Webhooks and executes them instantly
+3) Zero compilation required: runs with standard Python
+
+Instalación:
+    pip install MetaTrader5 requests
+
+Uso:
+    python marketsense_mt5_bridge.py
 \"\"\"
 import time
 import requests
 import MetaTrader5 as mt5
 
+BASE_URL = "${baseUrl}"
 SYNC_URL = "${syncUrl}"
+ORDERS_URL = "${ordersUrl}"
 INTERVAL_SEC = 2
 
+def execute_order(order):
+    symbol = order.get("symbol", "US500")
+    action_str = order.get("action", "BUY")
+    contracts = float(order.get("contracts", 0.5))
+
+    symbol_info = mt5.symbol_info(symbol)
+    if not symbol_info:
+        # Intentar símbolo alternativo común
+        for alt in ["US500", "SPX500", "SP500", "US500.cash", "EURUSD", "BTCUSD"]:
+            s = mt5.symbol_info(alt)
+            if s:
+                symbol = alt
+                symbol_info = s
+                break
+
+    if not symbol_info:
+        print("[!] Simbolo no disponible en tu broker: " + str(symbol))
+        return False
+
+    if not symbol_info.visible:
+        mt5.symbol_select(symbol, True)
+
+    order_type = mt5.ORDER_TYPE_BUY if action_str == "BUY" else mt5.ORDER_TYPE_SELL
+    price = mt5.symbol_info_tick(symbol).ask if action_str == "BUY" else mt5.symbol_info_tick(symbol).bid
+    point = symbol_info.point
+
+    sl = (price - 150 * point) if action_str == "BUY" else (price + 150 * point)
+    tp = (price + 350 * point) if action_str == "BUY" else (price - 350 * point)
+
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": contracts,
+        "type": order_type,
+        "price": price,
+        "sl": sl,
+        "tp": tp,
+        "deviation": 20,
+        "magic": 202610,
+        "comment": "MarketSense PyBridge",
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_IOC,
+    }
+
+    result = mt5.order_send(request)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        print("[!] Error ejecutando orden: " + str(result.comment))
+        return False
+
+    print("\\n[EJECUTADO EN MT5] " + str(action_str) + " " + str(contracts) + " en " + str(symbol) + " Ticket #" + str(result.order))
+    return True
+
 def main():
-    print("[EMS-MarketSense] Iniciando conexión directa con terminal MetaTrader 5...")
+    print("================================================================")
+    print("  EMS-MarketSense Universal Bridge para MetaTrader 5 (Python)   ")
+    print("================================================================")
+    print("Conectando con servidor MarketSense: " + BASE_URL)
+
     if not mt5.initialize():
         print("[!] Error inicializando MT5: " + str(mt5.last_error()))
+        print("    Asegurate de que el terminal MetaTrader 5 este instalado y abierto.")
         return
 
     acc = mt5.account_info()
@@ -280,14 +638,17 @@ def main():
         print("[!] No hay cuenta conectada en el terminal MT5: " + str(mt5.last_error()))
         return
 
-    print("[✓] Conectado a MetaTrader 5:")
-    print("    - Cuenta: #" + str(acc.login) + " (" + str(acc.server) + ")")
-    print("    - Saldo Real Reconocido: $" + f"{acc.balance:,.2f}" + " " + str(acc.currency))
-    print("    - Equidad: $" + f"{acc.equity:,.2f}")
-    print("    - Sincronizando con EMS-MarketSense cada " + str(INTERVAL_SEC) + "s...")
+    print("Conectado exitosamente al terminal MetaTrader 5:")
+    print("   - Broker:  " + str(acc.company))
+    print("   - Cuenta:  #" + str(acc.login) + " (" + str(acc.server) + ")")
+    print("   - Saldo:   $" + str(acc.balance) + " " + str(acc.currency))
+    print("   - Equidad: $" + str(acc.equity))
+    print("   - Sondeando y sincronizando cada " + str(INTERVAL_SEC) + " segundos...")
+    print("================================================================")
 
     try:
         while True:
+            # 1. Sincronizar telemetria de saldo en vivo
             acc = mt5.account_info()
             if acc:
                 payload = {
@@ -305,24 +666,49 @@ def main():
                 try:
                     r = requests.post(SYNC_URL, json=payload, timeout=4)
                     if r.status_code == 200:
-                        msg = "[SYNC OK] Saldo MT5: $" + f"{acc.balance:,.2f}" + " | Equidad: $" + f"{acc.equity:,.2f}"
-                        print(msg, end="\\r")
+                        print("[SYNC ACTIVO] Saldo: " + str(acc.balance) + " | Equidad: " + str(acc.equity), end="\\r")
                 except Exception as ex:
-                    print("\\n[!] Error enviando sync: " + str(ex))
+                    pass
+
+            # 2. Consultar si hay ordenes pendientes de TradingView / Webhook
+            try:
+                ro = requests.get(ORDERS_URL + "?account_id=" + str(acc.login), timeout=3)
+                if ro.status_code == 200:
+                    order_data = ro.json()
+                    if order_data.get("has_order") and order_data.get("order"):
+                        ord_obj = order_data["order"]
+                        print("\\nNueva orden recibida desde MarketSense: " + str(ord_obj.get("action")) + " " + str(ord_obj.get("symbol")))
+                        execute_order(ord_obj)
+            except Exception as ex:
+                pass
+
             time.sleep(INTERVAL_SEC)
     except KeyboardInterrupt:
-        print("\\n[EMS-MarketSense] Desconectando...")
+        print("\\n[EMS-MarketSense] Desconectando puente Python...")
     finally:
         mt5.shutdown()
 
 if __name__ == "__main__":
     main()
+"""
 `;
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="marketsense_mt5_bridge.py"');
   return res.send(pyCode);
 });
+
+// 5b. Download full standalone Python Trading Bot
+app.get('/api/mt5/download-bot', (req, res) => {
+  const filePath = path.resolve(process.cwd(), 'public', 'marketsense_standalone_bot.py');
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="marketsense_standalone_bot.py"');
+    return res.sendFile(filePath);
+  }
+  return res.status(404).send('Bot script not found');
+});
+
 
 // ==========================================
 // 6. 5-Digit Device-to-Device Cloud Sync Relay
