@@ -10,12 +10,13 @@ import {
   Layers
 } from 'lucide-react';
 import { TradingAccount } from '../types/execution';
+import { TabId, getAvailableModules } from '../config/modules';
 
 interface HeaderProps {
   activeAccount: TradingAccount;
   isDaemonRunning: boolean;
-  activeTab: 'BOT' | 'PYTHON' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL';
-  setActiveTab: (tab: 'BOT' | 'PYTHON' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL') => void;
+  activeTab: TabId;
+  setActiveTab: (tab: TabId) => void;
   onOpenSettings: () => void;
   onOpenPwa: () => void;
   onOpenSync: () => void;
@@ -103,72 +104,35 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Navigation Tabs */}
         <nav className="flex items-center justify-between border-t border-[#EAE5DA] pt-2 overflow-x-auto scrollbar-none">
           <div className="flex gap-1 sm:gap-2 w-full justify-between sm:justify-start">
-            <button
-              onClick={() => setActiveTab('BOT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'BOT'
-                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
-                  : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
-              }`}
-            >
-              🤖 Mi Bot
-            </button>
-
-            <button
-              onClick={() => setActiveTab('PYTHON')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'PYTHON'
-                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
-                  : 'text-[#2E4A35] font-bold hover:text-[#191C21] hover:bg-[#EBF2EC]'
-              }`}
-            >
-              <span>🐍</span>
-              <span>Python Directo</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('SETUP')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'SETUP'
-                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
-                  : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
-              }`}
-            >
-              ⚡ Piloto 24/7
-            </button>
-
-            <button
-              onClick={() => setActiveTab('CONNECT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'CONNECT'
-                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
-                  : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
-              }`}
-            >
-              🔑 Conectar Cuenta
-            </button>
-
-            <button
-              onClick={() => setActiveTab('STRATEGY')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'STRATEGY'
-                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
-                  : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
-              }`}
-            >
-              📜 Estrategia
-            </button>
-
-            <button
-              onClick={() => setActiveTab('JOURNAL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'JOURNAL'
-                  ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
-                  : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
-              }`}
-            >
-              📖 Diario
-            </button>
+            {getAvailableModules().map(mod => {
+              const isActive = activeTab === mod.id;
+              return (
+                <button
+                  key={mod.id}
+                  onClick={() => setActiveTab(mod.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-[#2D4734] text-[#F8F6F0] shadow-sm'
+                      : mod.id === 'PYTHON'
+                      ? 'text-[#2E4A35] font-bold hover:text-[#191C21] hover:bg-[#EBF2EC]'
+                      : 'text-[#575B62] hover:text-[#191C21] hover:bg-[#EFECE4]'
+                  }`}
+                  title={mod.description}
+                >
+                  <span>{mod.icon}</span>
+                  <span>{mod.label}</span>
+                  {mod.badge && (
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                      isActive 
+                        ? 'bg-[#406349] text-[#F8F6F0]' 
+                        : 'bg-[#EBF2EC] text-[#2E4A35]'
+                    }`}>
+                      {mod.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </nav>
       </div>

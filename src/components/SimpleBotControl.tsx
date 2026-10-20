@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { TradingAccount, TradeOrder, MarketTicker, MT5LiveSyncInfo } from '../types/execution';
 import { formatPrice } from '../lib/symbolResolver';
+import { APP_FEATURES } from '../config/features';
 
 interface SimpleBotControlProps {
   activeAccount: TradingAccount;
@@ -63,58 +64,60 @@ export const SimpleBotControl: React.FC<SimpleBotControlProps> = ({
   return (
     <div className="max-w-xl mx-auto space-y-5">
       {/* Direct Python Bot Callout Card */}
-      <div className="ivory-card rounded-2xl p-4 sm:p-5 border-2 border-[#2E4A35]/30 bg-gradient-to-br from-[#FDFCF9] to-[#EBF2EC] space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[#2E4A35] text-white flex items-center justify-center font-mono font-bold text-sm">
-              Py
-            </span>
-            <div>
-              <h3 className="font-serif text-sm sm:text-base font-bold text-[#191C21]">
-                ¿Prefieres operar 100% en Python? (Conexión Real Directa)
-              </h3>
-              <p className="text-[11px] text-[#575B62]">
-                Conecta tus credenciales con <code className="font-mono bg-white px-1 py-0.5 rounded border border-[#DDD8CD]">mt5.login(...)</code> sin intermediarios ni simulaciones.
-              </p>
+      {APP_FEATURES.enablePythonDirect && (
+        <div className="ivory-card rounded-2xl p-4 sm:p-5 border-2 border-[#2E4A35]/30 bg-gradient-to-br from-[#FDFCF9] to-[#EBF2EC] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-[#2E4A35] text-white flex items-center justify-center font-mono font-bold text-sm">
+                Py
+              </span>
+              <div>
+                <h3 className="font-serif text-sm sm:text-base font-bold text-[#191C21]">
+                  ¿Prefieres operar 100% en Python? (Conexión Real Directa)
+                </h3>
+                <p className="text-[11px] text-[#575B62]">
+                  Conecta tus credenciales con <code className="font-mono bg-white px-1 py-0.5 rounded border border-[#DDD8CD]">mt5.login(...)</code> sin intermediarios ni simulaciones.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <p className="text-xs text-[#575B62] leading-relaxed">
-          En Python en tu máquina, conectar tus credenciales reales no tiene complicaciones: lee tu saldo real del broker, ejecuta órdenes con riesgo matemático y mueve el Stop Loss a Breakeven solo.
-        </p>
+          <p className="text-xs text-[#575B62] leading-relaxed">
+            En Python en tu máquina, conectar tus credenciales reales no tiene complicaciones: lee tu saldo real del broker, ejecuta órdenes con riesgo matemático y mueve el Stop Loss a Breakeven solo.
+          </p>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          {onNavigateToPython && (
-            <button
-              onClick={onNavigateToPython}
-              className="flex-1 py-2 px-3 rounded-xl bg-[#2E4A35] hover:bg-[#233a2a] text-[#F8F6F0] font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition"
+          <div className="flex flex-wrap gap-2 pt-1">
+            {onNavigateToPython && (
+              <button
+                onClick={onNavigateToPython}
+                className="flex-1 py-2 px-3 rounded-xl bg-[#2E4A35] hover:bg-[#233a2a] text-[#F8F6F0] font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition"
+              >
+                <span>🐍 Configurar Bot en Python</span>
+              </button>
+            )}
+
+            <a
+              href="/api/mt5/download-bot"
+              download="marketsense_standalone_bot.py"
+              className="py-2 px-3 rounded-xl bg-[#FAF8F3] hover:bg-[#EFECE4] border border-[#DDD8CD] text-[#191C21] font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
             >
-              <span>🐍 Configurar Bot en Python</span>
-            </button>
-          )}
+              <Download className="w-3.5 h-3.5" />
+              <span>Descargar .py</span>
+            </a>
 
-          <a
-            href="/api/mt5/download-bot"
-            download="marketsense_standalone_bot.py"
-            className="py-2 px-3 rounded-xl bg-[#FAF8F3] hover:bg-[#EFECE4] border border-[#DDD8CD] text-[#191C21] font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Descargar .py</span>
-          </a>
-
-          {onResetToRealCleanMode && (
-            <button
-              onClick={onResetToRealCleanMode}
-              className="py-2 px-3 rounded-xl bg-[#FAF8F3] hover:bg-[#EFECE4] border border-[#DDD8CD] text-[#575B62] hover:text-[#191C21] font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
-              title="Borrar saldos y operaciones de simulación demo para empezar limpio"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-amber-600" />
-              <span>Limpiar Simulación</span>
-            </button>
-          )}
+            {onResetToRealCleanMode && (
+              <button
+                onClick={onResetToRealCleanMode}
+                className="py-2 px-3 rounded-xl bg-[#FAF8F3] hover:bg-[#EFECE4] border border-[#DDD8CD] text-[#575B62] hover:text-[#191C21] font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition"
+                title="Borrar saldos y operaciones de simulación demo para empezar limpio"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-amber-600" />
+                <span>Limpiar Simulación</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       {/* 1. Large Friendly Master Switch */}
       <div className="ivory-card rounded-2xl p-5 sm:p-6 text-center space-y-4">
         <div>

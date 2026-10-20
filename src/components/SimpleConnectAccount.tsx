@@ -68,12 +68,14 @@ export const SimpleConnectAccount: React.FC<SimpleConnectAccountProps> = ({
   const [server, setServer] = useState('ICMarkets-Demo01');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [balanceInput, setBalanceInput] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectStep, setConnectStep] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Architecture explainer accordion
+  // Architecture explainer & Algo trading guide accordions
   const [showArchitectureExplainer, setShowArchitectureExplainer] = useState(false);
+  const [showAlgoTradingGuide, setShowAlgoTradingGuide] = useState(true);
 
   // Modals / code drawer tabs
   const [syncTab, setSyncTab] = useState<'EA' | 'PYTHON'>('EA');
@@ -199,7 +201,11 @@ if __name__ == "__main__":
         let detectedType: AccountType = 'DEMO';
         let detectedBroker: BrokerPlatform = 'MetaTrader 5';
         let detectedName = `MetaTrader 5 (#${login})`;
-        const liveBalance = mt5SyncInfo?.balance || 100000;
+        // User inputted balance or live telemetry or default 5000
+        const parsedVal = parseFloat(balanceInput);
+        const liveBalance = (!isNaN(parsedVal) && parsedVal > 0)
+          ? parsedVal
+          : (mt5SyncInfo?.balance && mt5SyncInfo.balance > 0 ? mt5SyncInfo.balance : 5000);
 
         const foundPreset = COMMON_SERVERS.find(s => s.server.toLowerCase() === server.toLowerCase());
         if (foundPreset) {
@@ -252,10 +258,19 @@ if __name__ == "__main__":
         };
 
         onAddAccount(newAccount);
+
+        // Update backend telemetry with custom balance
+        fetch('/api/mt5/force-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ balance: liveBalance, login: login.trim(), server: server.trim() }),
+        }).catch(() => {});
+
         setIsConnecting(false);
-        setSuccessMessage(`¡Cuenta #${login} vinculada con éxito! Recuerda activar el Expert Advisor en tu MetaTrader para que el saldo se actualice en vivo.`);
+        setSuccessMessage(`¡Cuenta #${login} vinculada con éxito ($${liveBalance.toLocaleString('en-US')} USD)! Recuerda tener activo el botón "Trading Algorítmico" en tu MetaTrader.`);
         setLogin('');
         setPassword('');
+        setBalanceInput('');
       }, 700);
     }, 700);
   };
@@ -584,6 +599,27 @@ if __name__ == "__main__":
             </p>
           </div>
 
+          {/* 4. Saldo Inicial / Real (USD) */}
+          <div>
+            <label className="text-xs font-semibold text-[#191C21] block mb-1">
+              4. Saldo Real / Inicial (USD) - Opcional
+            </label>
+            <div className="relative">
+              <DollarSign className="w-4 h-4 text-[#8C9098] absolute left-3 top-2.5" />
+              <input
+                type="number"
+                step="any"
+                value={balanceInput}
+                onChange={e => setBalanceInput(e.target.value)}
+                placeholder="Ej. 5000 o 10000 (O déjalo vacío para auto-detectar de MT5/Python)"
+                className="w-full bg-[#F3EFE6] border border-[#DDD8CD] rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-[#191C21] focus:outline-none focus:border-[#2E4A35]"
+              />
+            </div>
+            <p className="text-[11px] text-[#8C9098] mt-1">
+              Fija tu saldo real sin esperar a que el bot transmita, eliminando saldos demo de 100k.
+            </p>
+          </div>
+
           {/* Submit button */}
           <div className="pt-2">
             <button
@@ -613,6 +649,102 @@ if __name__ == "__main__":
             </div>
           )}
         </form>
+      </div>
+
+      {/* Guía Visual: Cómo Activar el Trading Algorítmico */}
+      <div className="ivory-card rounded-2xl p-5 sm:p-6 border-2 border-[#2E4A35]/30 bg-gradient-to-br from-[#FDFCF9] to-[#EBF2EC] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[#2E4A35] text-white flex items-center justify-center font-bold text-sm">
+              🤖
+            </span>
+            <div>
+              <h2 className="font-serif text-sm sm:text-base font-bold text-[#191C21]">
+                ¿Cómo activar el Trading Algorítmico en MetaTrader 5?
+              </h2>
+              <p className="text-[11px] text-[#575B62]">
+                Sigue estos 3 pasos rápidos en tu computadora para permitir que el bot opere:
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAlgoTradingGuide(prev => !prev)}
+            className="text-xs font-semibold text-[#2E4A35] hover:underline cursor-pointer"
+          >
+            {showAlgoTradingGuide ? 'Ocultar' : 'Ver guía'}
+          </button>
+        </div>
+
+        {showAlgoTradingGuide && (
+          <div className="space-y-3 pt-1 text-xs">
+            {/* Paso 1: Botón Algo Trading en barra de herramientas */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#DDD8CD] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#191C21] flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#2E4A35] text-white flex items-center justify-center text-[11px]">1</span>
+                  <span>Botón "Trading Algorítmico" en la barra superior de MT5</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#EBF2EC] text-[#2E4A35] font-bold border border-[#C5DDCB]">
+                  Atajo: Ctrl + E
+                </span>
+              </div>
+              <p className="text-[#575B62] leading-relaxed text-[11px]">
+                En la barra de herramientas superior de MetaTrader 5, pulsa el botón con el icono de Play ▶️ llamado <strong>"Trading Algorítmico"</strong> (o presiona <code className="bg-[#FAF8F3] px-1 py-0.5 rounded border border-[#DDD8CD] font-mono">Ctrl + E</code>).
+              </p>
+              <div className="flex items-center gap-2 text-[11px] p-2 rounded-lg bg-[#FAF8F3] border border-[#E7E2D8]">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[#2E4A35] font-semibold">Debe estar en VERDE con Play ▶️</span>
+                <span className="text-slate-400">|</span>
+                <span className="text-rose-700 font-semibold">Si está en ROJO ⏹️, MT5 bloquea todas las órdenes.</span>
+              </div>
+            </div>
+
+            {/* Paso 2: Opciones de MT5 */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#DDD8CD] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#191C21] flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#2E4A35] text-white flex items-center justify-center text-[11px]">2</span>
+                  <span>Habilitar WebRequest y Permisos (Opciones de MT5)</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#FAF8F3] text-[#575B62] border border-[#DDD8CD]">
+                  Atajo: Ctrl + O
+                </span>
+              </div>
+              <p className="text-[#575B62] leading-relaxed text-[11px]">
+                En MT5 ve al menú <strong>Herramientas → Opciones</strong> (o presiona <code className="bg-[#FAF8F3] px-1 py-0.5 rounded border border-[#DDD8CD] font-mono">Ctrl + O</code>) y ve a la pestaña <strong>"Asesores Expertos"</strong>:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-[#3F434A] pl-2 font-medium">
+                <li>Marca: <strong>☑️ Permitir trading algorítmico</strong></li>
+                <li>Marca: <strong>☑️ Permitir WebRequest para las siguientes URL</strong> y añade la URL de este servidor.</li>
+              </ul>
+            </div>
+
+            {/* Paso 3: Poner el bot a operar */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#DDD8CD] space-y-2">
+              <span className="font-bold text-[#191C21] flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#2E4A35] text-white flex items-center justify-center text-[11px]">3</span>
+                <span>Arrastrar el EA al gráfico o ejecutar el script de Python</span>
+              </span>
+              <p className="text-[#575B62] leading-relaxed text-[11px]">
+                <strong>Opción A (Python):</strong> Abre la terminal de comandos en tu PC y escribe: <code className="bg-[#191C21] text-emerald-400 px-1.5 py-0.5 rounded font-mono">python marketsense_standalone_bot.py</code>.
+                <br />
+                <strong>Opción B (EA MT5):</strong> Arrastra el archivo <code className="font-mono text-[#2E4A35]">MarketSense_Universal_Bridge.mq5</code> sobre cualquier gráfico en MT5. Verifica que en la esquina superior derecha del gráfico aparezca el <strong>birrete azul sonriente 😊</strong>.
+              </p>
+            </div>
+
+            {/* Paso 4: Encender en la Web */}
+            <div className="p-3.5 rounded-xl bg-[#2E4A35] text-[#F8F6F0] space-y-1">
+              <span className="font-bold flex items-center gap-2 text-[#A9D1B2]">
+                <Zap className="w-4 h-4 text-[#A9D1B2]" />
+                <span>Paso 4: Enciende el Bot en este Panel Web</span>
+              </span>
+              <p className="text-[#EBF2EC] leading-relaxed text-[11px]">
+                Ve a la pestaña <strong>"Mi Bot"</strong> y pulsa el botón central grande <strong>"ENCENDER BOT AHORA"</strong>. Se encenderá en verde indicando <em>"Bot en Vigilancia Activa 24/7"</em>.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 6. Cuentas Vinculadas */}

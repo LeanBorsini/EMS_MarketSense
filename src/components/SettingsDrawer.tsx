@@ -13,6 +13,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { TradingAccount } from '../types/execution';
+import { APP_FEATURES } from '../config/features';
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -107,33 +108,37 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           {/* Tools Menu */}
           <div className="space-y-1.5 pt-2 border-t border-[#EAE5DA]">
-            <button
-              onClick={() => {
-                onClose();
-                onOpenManualOrder();
-              }}
-              className="w-full p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E6E1D6] hover:bg-[#F3EFE6] flex items-center justify-between font-semibold text-[#191C21] transition"
-            >
-              <div className="flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-[#2E4A35]" />
-                <span>Abrir Orden Manual de Prueba</span>
-              </div>
-              <span className="text-[10px] text-[#8C9098]">Calculador de Lote</span>
-            </button>
+            {APP_FEATURES.enableManualTradePlacer && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenManualOrder();
+                }}
+                className="w-full p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E6E1D6] hover:bg-[#F3EFE6] flex items-center justify-between font-semibold text-[#191C21] transition"
+              >
+                <div className="flex items-center gap-2">
+                  <PlusCircle className="w-4 h-4 text-[#2E4A35]" />
+                  <span>Abrir Orden Manual de Prueba</span>
+                </div>
+                <span className="text-[10px] text-[#8C9098]">Calculador de Lote</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => {
-                onClose();
-                onOpenSync();
-              }}
-              className="w-full p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E6E1D6] hover:bg-[#F3EFE6] flex items-center justify-between font-semibold text-[#191C21] transition"
-            >
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-[#2E4A35]" />
-                <span>Sincronizar con otro Móvil o PC</span>
-              </div>
-              <span className="text-[10px] text-[#2E4A35] font-semibold bg-[#EBF2EC] px-2 py-0.5 rounded-md">Código de 5 Dígitos</span>
-            </button>
+            {APP_FEATURES.enableCloudDeviceSync && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenSync();
+                }}
+                className="w-full p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E6E1D6] hover:bg-[#F3EFE6] flex items-center justify-between font-semibold text-[#191C21] transition"
+              >
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-[#2E4A35]" />
+                  <span>Sincronizar con otro Móvil o PC</span>
+                </div>
+                <span className="text-[10px] text-[#2E4A35] font-semibold bg-[#EBF2EC] px-2 py-0.5 rounded-md">Código de 5 Dígitos</span>
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -149,37 +154,41 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               <span className="text-[10px] text-[#8C9098]">Pantalla de Inicio</span>
             </button>
 
-            <button
-              onClick={() => {
-                onClose();
-                onOpenRunnerGuide();
-              }}
-              className="w-full p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E6E1D6] hover:bg-[#F3EFE6] flex items-center justify-between font-semibold text-[#191C21] transition"
-            >
-              <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-[#2E4A35]" />
-                <span>Guía Desatendida 24/7 (Oracle / VPS)</span>
-              </div>
-              <span className="text-[10px] text-[#8C9098]">Opción Gratis</span>
-            </button>
+            {APP_FEATURES.enableUnattendedVpsGuide && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenRunnerGuide();
+                }}
+                className="w-full p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E6E1D6] hover:bg-[#F3EFE6] flex items-center justify-between font-semibold text-[#191C21] transition"
+              >
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-[#2E4A35]" />
+                  <span>Guía Desatendida 24/7 (Oracle / VPS)</span>
+                </div>
+                <span className="text-[10px] text-[#8C9098]">Opción Gratis</span>
+              </button>
+            )}
           </div>
 
           {/* Emergency Panic Button */}
-          <div className="pt-2 border-t border-[#EAE5DA]">
-            <button
-              onClick={() => {
-                onPanicKillSwitch();
-                onClose();
-              }}
-              className="w-full p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 flex items-center justify-center gap-2 font-bold text-xs transition cursor-pointer"
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span>Cierre de Pánico: Cerrar Todo y Pausar Bot</span>
-            </button>
-            <p className="text-[10px] text-[#8C9098] text-center mt-1">
-              Úsalo solo si quieres cerrar todas las órdenes vivas de inmediato.
-            </p>
-          </div>
+          {APP_FEATURES.enableRiskCircuitBreaker && (
+            <div className="pt-2 border-t border-[#EAE5DA]">
+              <button
+                onClick={() => {
+                  onPanicKillSwitch();
+                  onClose();
+                }}
+                className="w-full p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 flex items-center justify-center gap-2 font-bold text-xs transition cursor-pointer"
+              >
+                <ShieldAlert className="w-4 h-4" />
+                <span>Cierre de Pánico: Cerrar Todo y Pausar Bot</span>
+              </button>
+              <p className="text-[10px] text-[#8C9098] text-center mt-1">
+                Úsalo solo si quieres cerrar todas las órdenes vivas de inmediato.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

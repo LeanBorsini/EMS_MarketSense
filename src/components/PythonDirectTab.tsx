@@ -474,6 +474,75 @@ export const PythonDirectTab: React.FC<PythonDirectTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 6. Guía 24/7 Desatendida: Cómo operar con tu PC apagada usando un VPS */}
+      <div className="ivory-card rounded-2xl p-5 sm:p-6 border-2 border-[#2E4A35]/30 bg-gradient-to-br from-[#FDFCF9] to-[#EBF2EC] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#2E4A35] text-white flex items-center justify-center font-bold text-sm shadow-sm">
+              ☁️
+            </div>
+            <div>
+              <h2 className="font-serif text-sm sm:text-base font-bold text-[#191C21]">
+                ¿Cómo mantener el bot trabajando 24/7 con tu PC apagada?
+              </h2>
+              <p className="text-[11px] text-[#575B62]">
+                La solución profesional estándar: Un <strong>VPS (Servidor Privado Virtual)</strong> en la nube.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 text-xs leading-relaxed">
+          <p className="text-[#3F434A]">
+            Si apagas tu laptop o entra en suspensión, MetaTrader y Python se detienen. Para que opere <strong>día y noche sin que tu PC esté encendida</strong>, se utiliza un <strong>VPS</strong>: una computadora virtual en la nube (Windows) que está encendida los 365 días del año en un centro de datos con internet ultraveloz.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            {/* Opción 1: VPS Gratis del Broker */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#DDD8CD] space-y-1.5 shadow-sm">
+              <span className="font-bold text-[#2E4A35] block text-xs">
+                1. VPS Gratis de tu Broker
+              </span>
+              <p className="text-[11px] text-[#575B62]">
+                Brokers como <strong>ICMarkets, Pepperstone, Exness o HFM</strong> regalan un VPS patrocinado gratuito si tienes una cuenta real o cierto volumen mensual de trading. Puedes solicitarlo directo en su área de clientes.
+              </p>
+            </div>
+
+            {/* Opción 2: MQL5 Virtual Hosting */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#DDD8CD] space-y-1.5 shadow-sm">
+              <span className="font-bold text-[#191C21] block text-xs">
+                2. Hosting Virtual de MT5 (1 Clic)
+              </span>
+              <p className="text-[11px] text-[#575B62]">
+                En tu propio MetaTrader 5, haz clic derecho sobre tu cuenta en la ventana "Navegador" y selecciona <em>"Registrar un servidor virtual"</em>. Clona tu terminal y el bot a la nube de MetaQuotes en 1 minuto.
+              </p>
+            </div>
+
+            {/* Opción 3: VPS Económico o Cloud */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#DDD8CD] space-y-1.5 shadow-sm">
+              <span className="font-bold text-[#191C21] block text-xs">
+                3. VPS Barato ($4 - $8/mes)
+              </span>
+              <p className="text-[11px] text-[#575B62]">
+                Empresas como <strong>Contabo, ForexVPS o Kamatera</strong> ofrecen servidores Windows por unos pocos dólares al mes, o la capa gratuita de por vida de <strong>Oracle Cloud</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Workflow en 3 pasos */}
+          <div className="p-3.5 rounded-xl bg-white border border-[#C5DDCB] space-y-2">
+            <span className="font-bold text-[#2E4A35] text-xs block">
+              El flujo de trabajo en 3 pasos:
+            </span>
+            <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#3F434A] pl-1 font-medium">
+              <li>Te conectas al VPS desde tu PC o celular con la app gratuita <strong>"Escritorio Remoto" (Microsoft Remote Desktop)</strong>.</li>
+              <li>Abres MetaTrader 5 o ejecutas <code className="bg-[#FAF8F3] px-1 py-0.5 rounded border border-[#DDD8CD] font-mono">python marketsense_standalone_bot.py</code> dentro del VPS.</li>
+              <li><strong>Cierras la ventana de Escritorio Remoto y apagas tu PC.</strong> El bot sigue operando 24/7 en la nube y envía el saldo a este panel web para que lo consultes desde tu teléfono móvil cuando quieras.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

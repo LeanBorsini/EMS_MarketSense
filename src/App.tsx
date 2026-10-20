@@ -15,6 +15,8 @@ import { PWAInstallModal } from './components/PWAInstallModal';
 import { RunnerGuideModal } from './components/RunnerGuideModal';
 import { PythonDirectTab } from './components/PythonDirectTab';
 import { TradeOrder } from './types/execution';
+import { TabId, getAvailableModules } from './config/modules';
+import { APP_FEATURES } from './config/features';
 
 export default function App() {
   const {
@@ -52,8 +54,16 @@ export default function App() {
 
   const { isInstallable, isInstalled, isIOS, installApp } = usePWAInstall();
 
-  // Tab navigation: Clean & simple
-  const [activeTab, setActiveTab] = useState<'BOT' | 'PYTHON' | 'SETUP' | 'CONNECT' | 'STRATEGY' | 'JOURNAL'>('BOT');
+  // Tab navigation: Clean & modular
+  const [activeTab, setActiveTab] = useState<TabId>('BOT');
+
+  // Guard activeTab if a module is turned off or removed
+  useEffect(() => {
+    const available = getAvailableModules().map(m => m.id);
+    if (!available.includes(activeTab)) {
+      setActiveTab('BOT');
+    }
+  }, [activeTab]);
 
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -116,7 +126,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'PYTHON' && (
+        {activeTab === 'PYTHON' && APP_FEATURES.enablePythonDirect && (
           <PythonDirectTab
             activeAccount={activeAccount}
             mt5SyncInfo={mt5SyncInfo}
@@ -127,7 +137,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'SETUP' && (
+        {activeTab === 'SETUP' && APP_FEATURES.enableTradingViewWebhooks && (
           <UnattendedSetupTab
             activeAccount={activeAccount}
             onSendTestSignal={handleSendTestSignal}
@@ -135,7 +145,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'CONNECT' && (
+        {activeTab === 'CONNECT' && APP_FEATURES.enableMetaTraderEA && (
           <SimpleConnectAccount
             accounts={accounts}
             activeAccountId={activeAccountId}
@@ -150,7 +160,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'STRATEGY' && (
+        {activeTab === 'STRATEGY' && APP_FEATURES.enableAiStrategyAudit && (
           <SimpleStrategyBridge
             strategies={strategies}
             activeAccount={activeAccount}
@@ -160,7 +170,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'JOURNAL' && (
+        {activeTab === 'JOURNAL' && APP_FEATURES.enableTradingJournal && (
           <SimpleJournal
             trades={accountTrades}
             onSaveNotes={updateTradeJournalNotes}
